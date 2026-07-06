@@ -1,0 +1,8 @@
+[
+{
+  "directory": "C:/Users/snakeAs/Desktop/3Dengine/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\gcc.exe -isystem C:/SDL3/x86_64-w64-mingw32/include -g -o CMakeFiles\\3DEngine.dir\\main.c.obj -c C:\\Users\\snakeAs\\Desktop\\3Dengine\\main.c",
+  "file": "C:/Users/snakeAs/Desktop/3Dengine/main.c",
+  "output": "C:/Users/snakeAs/Desktop/3Dengine/build/CMakeFiles/3DEngine.dir/main.c.obj"
+}
+]

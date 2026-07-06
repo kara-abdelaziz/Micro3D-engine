@@ -1,0 +1,123 @@
+{
+	"configurations" : 
+	[
+		{
+			"abstractTargets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "SDL3::Headers::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-SDL3__Headers-Debug-43baab264d24fc8d1f84.json",
+					"name" : "SDL3::Headers",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "SDL3::SDL3-shared::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-SDL3__SDL3-shared-Debug-b2e0b2545cdc743b1f29.json",
+					"name" : "SDL3::SDL3-shared",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "SDL3::SDL3_test::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-SDL3__SDL3_test-Debug-97d466474f82cf2b0c9d.json",
+					"name" : "SDL3::SDL3_test",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "SDL3_image::SDL3_image-shared::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-SDL3_image__SDL3_image-shared-Debug-ca58b2388bfa9387a04c.json",
+					"name" : "SDL3_image::SDL3_image-shared",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "SDL3_mixer::SDL3_mixer-shared::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-SDL3_mixer__SDL3_mixer-shared-Debug-76ab18ce6f7cd1a8a2fd.json",
+					"name" : "SDL3_mixer::SDL3_mixer-shared",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "SDL3_ttf::SDL3_ttf-shared::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-SDL3_ttf__SDL3_ttf-shared-Debug-5760beb7ee4ceceffa27.json",
+					"name" : "SDL3_ttf::SDL3_ttf-shared",
+					"projectIndex" : 0
+				}
+			],
+			"directories" : 
+			[
+				{
+					"abstractTargetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5
+					],
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-f040eec181a89de70dbe.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.16"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"abstractTargetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5
+					],
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "3DEngineProject",
+					"targetIndexes" : 
+					[
+						0
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "3DEngine::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-3DEngine-Debug-ad3c71b9542bd3d488bd.json",
+					"name" : "3DEngine",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "C:/Users/snakeAs/Desktop/3Dengine/build",
+		"source" : "C:/Users/snakeAs/Desktop/3Dengine"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 10
+	}
+}
