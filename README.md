@@ -4,7 +4,7 @@ Micro3D-engine is a lightweight, educational **3D Software Renderer** written in
 
 Unlike modern engines that rely on GPU acceleration (OpenGL, DirectX, or Vulkan), this engine performs all calculations—from vertex transformation to pixel rasterization—entirely on the **CPU**.
 
-[![3DMicro-engine](3Dengine_screenshot.jpg)](https://youtu.be/j1Yld8eFJS0?si=Q85ZSOsHQG_2Iinf)
+[![3DMicro-engine](youtube.PNG)](https://youtu.be/j1Yld8eFJS0?si=Q85ZSOsHQG_2Iinf)
 
 ## About the project
 
