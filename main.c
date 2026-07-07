@@ -748,7 +748,7 @@ void initSDL(void) {
 	}	
 
     // SDL3 window creation
-    window = SDL_CreateWindow("SnakeAs 3D Software Engine", RES_HORIZ, RES_VERT, 0);
+    window = SDL_CreateWindow("3D Software Engine", RES_HORIZ, RES_VERT, 0);
     
     // We create a renderer just to copy our CPU pixels to the screen
     renderer = SDL_CreateRenderer(window, NULL);
@@ -3254,7 +3254,7 @@ static inline   void   Mix_PlayChannel_Bridge(int ch, MIX_Audio* audio, int loop
     
     // Set looping property (-1 in old SDL = infinite)
     SDL_PropertiesID      props =   SDL_CreateProperties()                                  ;
-    SDL_SetNumberProperty(props, MIX_PROP_PLAY_LOOPS_NUMBER, (loops == -1) ? -1 : loops)    ;
+    SDL_SetNumberProperty(props, MIX_PROP_PLAY_LOOPS_NUMBER, loops)    ;
     
     MIX_PlayTrack(gTracks[ch], props)   ;
 

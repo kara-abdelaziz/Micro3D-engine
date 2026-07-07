@@ -1,3 +1,0 @@
-C:/Users/snakeAs/Desktop/3Dengine/build/CMakeFiles/3DEngine.dir
-C:/Users/snakeAs/Desktop/3Dengine/build/CMakeFiles/edit_cache.dir
-C:/Users/snakeAs/Desktop/3Dengine/build/CMakeFiles/rebuild_cache.dir
