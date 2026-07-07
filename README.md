@@ -4,7 +4,7 @@ Micro3D-engine is a lightweight, educational **3D Software Renderer** written in
 
 Unlike modern engines that rely on GPU acceleration (OpenGL, DirectX, or Vulkan), this engine performs all calculations—from vertex transformation to pixel rasterization—entirely on the **CPU**.
 
----
+[![3DMicro-engine](3Dengine_screenshot.jpg)](https://youtu.be/j1Yld8eFJS0?si=Q85ZSOsHQG_2Iinf)
 
 ## About the project
 
@@ -78,6 +78,24 @@ cmake ..
 cmake --build .
 ```
 4. Launch `build\3DEngine.exe`.
+
+## 🚀 Quick Start (No Compilation Required)
+
+If you want to test the engine immediately without setting up a compiler or CMake, you can download the pre-compiled version for Windows:
+
+1. **Download the bundle:** 
+   [Download Micro3D-Engine-Windows.zip](https://github.com/kara-abdelaziz/Micro3D-engine/releases/download/v0.1.0-alpha/Micro3D-Engine-Windows.zip).
+
+2. **Extract the ZIP:** 
+   Extract the contents to a folder of your choice. The ZIP contains:
+   *   `3DEngine.exe` (The executable)
+   *   All required **DLLs** (`SDL3.dll`, `SDL3_image.dll`, etc.)
+   *   All necessary **Assets** (`.png`, `.mp3`, `.wav`, `.ttf`)
+
+3. **Run the Engine:** 
+   Double-click `3DEngine.exe` to launch the demo.
+
+> **⚠️ Note:** Since this is a custom-built executable, Windows Defender may show a "Windows protected your PC" warning. You may need to click *More info* -> *Run anyway* to start the application.
 
 ## Links
 - The author website [el-kalam.com](https://www.el-kalam.com)
