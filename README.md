@@ -12,7 +12,8 @@ The **Micro3D engine** project is a 3D graphics rendering engine implemented fro
 
 The ultimate goal was to recreate a rendering engine using the bare minimum of external libraries. The SDL library was used almost exclusively to provide a function for drawing a point (pixel) with a given color. Everything else—projection, rotation, scaling, texturing (scanlines), and back-face culling—was implemented manually through programming.
 
-*Note: This code reflects student work; it is raw, sparsely commented, and variables are not always explicit, but it proves that a 3D world can be built starting from a single pixel.*
+_*Note :* This code reflects student work; it is raw, sparsely commented, and variables are not always explicit, but it proves that a 3D world can be built starting from a single pixel._
+
 ---
 
 ## 🚀 Features
@@ -71,15 +72,18 @@ cd Micro3D-engine
 mkdir build
 cd build
 ```
-3. Configure and build
+3. Configure and build (Be sure the SDL3 paths in `CMakeLists.txt` matches SDL3 directories)
 ```bash
 cmake ..
 cmake --build .
 ```
-4. Launch `3DEngine.exe`.
+4. Launch `build\3DEngine.exe`.
+
+## Links
+- The author website [el-kalam.com](https://www.el-kalam.com)
 
 ## 📝 Author's Note
 
 "The code might not be the cleanest you'll find online—it was written 'in the heat of the moment' with non-explicit variables and minimal comments. However, its value lies in the proof that you can build a 3D world starting from a single pixel." 
  
-— ***kara-abdelaziz***
+— ***Abdelaziz Kara-***
