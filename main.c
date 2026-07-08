@@ -166,7 +166,7 @@ SDL_Surface*     chargerImage(const  char*  file)        ;
 void             chargementFichirs()              ;
 bool             Mix_OpenAudio()                  ;
 void             cleanUp()                        ;
-void             triangle(int X0 , int Y0 , int X1 , int Y1 ,int X2 ,int Y2) ;
+//void             triangle(int X0 , int Y0 , int X1 , int Y1 ,int X2 ,int Y2) ;
 
 
 
@@ -185,6 +185,9 @@ int   main(int  argc , char**  argv)
 	int         FPS  =   0      ;
 	int         i    =   1      ;
 	int         temps           ;
+	int         Dx   =   0      ;
+	int         Dy   =   0      ;
+	int         Dz   =   0      ;
 	
 	initialisation(&cube);
 	
@@ -220,6 +223,11 @@ int   main(int  argc , char**  argv)
 		dessinEnv2D()   ;
 		
 		changementEchell_rotation(&cube)    ;
+		translation(&cube, Dx, Dy, Dz)	    ;
+
+		Dx   =   0      ;
+		Dy   =   0      ;
+		Dz   =   0      ;
 		
 		//afficheObjetMesh(&cube)    ;
 		afficheObjetTexture(&cube)  ;
@@ -254,7 +262,7 @@ int   main(int  argc , char**  argv)
 		
 		if(keystates[SDL_SCANCODE_UP])
 		{
-			changementEchell_rotation(&cube)     ;
+			//changementEchell_rotation(&cube)     ;
 			cube.angleX     -=   0.05            ;
 			
 			rectSrc.x   =   40     ;
@@ -278,7 +286,7 @@ int   main(int  argc , char**  argv)
 		
 		if(keystates[SDL_SCANCODE_DOWN])
 		{
-			changementEchell_rotation(&cube)     ;
+			//changementEchell_rotation(&cube)     ;
 			cube.angleX     +=   0.05            ;
 			
 			rectSrc.x   =   80     ;
@@ -301,8 +309,8 @@ int   main(int  argc , char**  argv)
 		}
 		
 		if(keystates[SDL_SCANCODE_RIGHT])
-        	{
-			changementEchell_rotation(&cube)     ;
+        {
+			//changementEchell_rotation(&cube)     ;
 			cube.angleY     -=   0.05            ;
 			
 			rectSrc.x   =   120    ;
@@ -326,7 +334,7 @@ int   main(int  argc , char**  argv)
 		
 		if(keystates[SDL_SCANCODE_LEFT])
 		{
-			changementEchell_rotation(&cube)     ;
+			//changementEchell_rotation(&cube)     ;
 			cube.angleY     +=   0.05            ;
 			
 			rectSrc.x   =   0      ;
@@ -350,7 +358,7 @@ int   main(int  argc , char**  argv)
 		
 		if(keystates[SDL_SCANCODE_PAGEUP])
 		{
-			changementEchell_rotation(&cube)     ;
+			//changementEchell_rotation(&cube)     ;
 			cube.angleZ     -=   0.05            ;
 			
 			rectSrc.x   =   160    ;
@@ -374,7 +382,7 @@ int   main(int  argc , char**  argv)
 		
 		if(keystates[SDL_SCANCODE_PAGEDOWN])
 		{
-			changementEchell_rotation(&cube)     ;
+			//changementEchell_rotation(&cube)     ;
 			cube.angleZ     +=   0.05            ;
 			
 			rectSrc.x   =   200    ;
@@ -398,7 +406,8 @@ int   main(int  argc , char**  argv)
 		
 		if(keystates[SDL_SCANCODE_W] && (cube.centre.z < 12100))
 		{
-			translation(&cube , 0 , 0 ,  5)    ;
+			//translation(&cube , 0 , 0 ,  5)    ;
+			Dz    +=   5           ;
 			
 			rectSrc.x   =   40     ;
 			rectSrc.y   =   80     ;
@@ -422,7 +431,8 @@ int   main(int  argc , char**  argv)
 		
 		if(keystates[SDL_SCANCODE_S] && (cube.centre.z > 1500))
 		{
-			translation(&cube , 0 , 0 , -5)    ;
+			//translation(&cube , 0 , 0 , -5)    ;
+			Dz    -=   5           ;
 			
 			rectSrc.x   =   80     ;
 			rectSrc.y   =   80     ;
@@ -446,7 +456,8 @@ int   main(int  argc , char**  argv)
 		
 		if(keystates[SDL_SCANCODE_D] && (cube.centre.x < 4500))
 		{
-			translation(&cube ,  5 , 0 , 0)    ;
+			//translation(&cube ,  5 , 0 , 0)    ;
+			Dx    +=   5           ;
 			
 			rectSrc.x   =   0      ;
 			rectSrc.y   =   80     ;
@@ -469,8 +480,9 @@ int   main(int  argc , char**  argv)
 		}
 		
 		if(keystates[SDL_SCANCODE_A] && (cube.centre.x > -4500))
-        	{
-			translation(&cube , -5 , 0 , 0)    ;
+        {
+			//translation(&cube , -5 , 0 , 0)    ;
+			Dx    -=   5           ;
 			
 			rectSrc.x   =   120    ;
 			rectSrc.y   =   80     ;
@@ -494,7 +506,8 @@ int   main(int  argc , char**  argv)
 		
 		if(keystates[SDL_SCANCODE_Q] && (cube.centre.y > -4500))
 		{
-			translation(&cube , 0 , -5 , 0)    ;
+			//translation(&cube , 0 , -5 , 0)    ;
+			Dy    -=   5           ;
 			
 			rectSrc.x   =   160    ;
 			rectSrc.y   =   80     ;
@@ -518,7 +531,8 @@ int   main(int  argc , char**  argv)
 		
 		if(keystates[SDL_SCANCODE_E] && (cube.centre.y < 4500))
         	{
-			translation(&cube , 0 ,  5 , 0)    ;
+			//translation(&cube , 0 ,  5 , 0)    ;
+			Dy    +=   5           ;			
 			
 			rectSrc.x   =   200    ;
 			rectSrc.y   =   80     ;
@@ -543,7 +557,7 @@ int   main(int  argc , char**  argv)
 		if(keystates[SDL_SCANCODE_KP_PLUS] && (cube.echell < 1.1f))
 		{
 			cube.echell     +=   0.002        ;
-			changementEchell_rotation(&cube)  ;
+			//changementEchell_rotation(&cube)  ;
 			
 			rectSrc.x   =   240    ;
 			rectSrc.y   =   0      ;
@@ -567,7 +581,7 @@ int   main(int  argc , char**  argv)
 		if(keystates[SDL_SCANCODE_KP_MINUS] && (cube.echell > 0.5f))
         	{
 			cube.echell     -=   0.002        ;
-			changementEchell_rotation(&cube)  ;
+			//changementEchell_rotation(&cube)  ;
 			
 			rectSrc.x   =   240    ;
 			rectSrc.y   =   80     ;
@@ -711,7 +725,7 @@ int   main(int  argc , char**  argv)
     		SDL_Delay((1000 / FRAMES_PER_SECOND) - (Uint32)elapsed);
 		}
 
-		//printf("FPS = %i\n", (FPS += 1000 / elapsed)/i++)   ;
+		printf("FPS = %i\n", (FPS += 1000 / elapsed)/i++)   ;
 	}
 	
 	//attendreTouche()          ;
@@ -3114,15 +3128,15 @@ static inline   void   triTableau(int tableau[][2] , int * position , int action
 {
 	int    i  =   *position   ;
 	
-	tableau[*position][0]   =   action     ;
-	tableau[*position][1]   =   y          ;
-	
-	while((tableau[i][1] < tableau[i-1][1]) && (i != 0))
+	while((i > 0) && (y < tableau[i-1][1]))
 	{
-		swap((int *)&tableau[i][0] , (int *)&tableau[i-1][0])   ;
-		swap((int *)&tableau[i][1] , (int *)&tableau[i-1][1])   ;
-		i--                                   ;
+		tableau[i][0] = tableau[i-1][0]   ;
+		tableau[i][1] = tableau[i-1][1]   ;
+		i--                               ;
 	}
+	
+	tableau[i][0]   =   action     ;
+	tableau[i][1]   =   y          ;
 	
 	(*position)++    ;
 	
@@ -3131,24 +3145,22 @@ static inline   void   triTableau(int tableau[][2] , int * position , int action
 
 static inline   void   delTableau(int tableau[][2] , int * taille , int action)
 {
-	int    i       ;
+	int    i , j      ;
 	
 	for(i = 0 ; i < (*taille) ; i++)
 	{
 		if(tableau[i][0] == action)
 		{
-			swap((int *)&tableau[i][0] , (int *)&tableau[i+1][0])   ;
-			swap((int *)&tableau[i][1] , (int *)&tableau[i+1][1])   ;
+			for(j = i ; j < (*taille)-1 ; j++)
+			{
+				tableau[j][0] = tableau[j+1][0]   ;
+				tableau[j][1] = tableau[j+1][1]   ;
+			}
+
+			(*taille)--    ;
+			return         ;
 		}
 	}
-	
-	if(tableau[i][0] == action)
-	{
-		tableau[i][0]   =   0     ;
-		tableau[i][1]   =   0     ;
-		(*taille)--               ;
-	}
-	return     ;
 }
 
 static inline  void    translation(Objet * objet , int Dx , int Dy , int Dz)
