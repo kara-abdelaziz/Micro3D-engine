@@ -32,6 +32,11 @@ add_custom_command(TARGET 3DEngine POST_BUILD
     "C:/SDL3/x86_64-w64-mingw32/bin/SDL3_mixer.dll"
     $<TARGET_FILE_DIR:3DEngine>)
 
+add_custom_command(TARGET 3DEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/Raziel"
+    "$<TARGET_FILE_DIR:3DEngine>/Raziel")
+
 # This will copy every PNG, WAV, MP3, and TTF file to the folder where the EXE is
 file(GLOB ASSETS_FILES 
     "${CMAKE_CURRENT_SOURCE_DIR}/*.png"
