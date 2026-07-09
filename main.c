@@ -1,5 +1,6 @@
 #include  <stdio.h>
 #include  <stdlib.h>
+#include  <string.h>
 #include  <math.h>
 
 #include <SDL3/SDL.h>
@@ -37,10 +38,12 @@ typedef     MIX_Audio Mix_Music  ;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-#define   NBRE_POINT_MAX     5000
-#define   NBRE_SEG_MAX       5000
+#define   PI 3.14159265358979323846
+
+#define   NBRE_POINT_MAX    5000
+#define   NBRE_SEG_MAX      6000
 #define   NBRE_OBJET_MAX     100
-#define   NBRE_FACE_MAX      2000
+#define   NBRE_FACE_MAX     2000
 
 #define   DISTANCE           512
 #define   RES_VERT           600
@@ -48,7 +51,7 @@ typedef     MIX_Audio Mix_Music  ;
 #define   RES_VERT_DIV_2     300
 #define   RES_HORIZ_DIV_2    400
 
-#define   FRAMES_PER_SECOND   60  // Can go up to 400 FPS on my PC :)
+#define   FRAMES_PER_SECOND   60 
 
 
 ////-------------------------variables globales-------------------------------------/////
@@ -233,8 +236,8 @@ int   main(int  argc , char**  argv)
 		Dy   =   0      ;
 		Dz   =   0      ;
 		
-		afficheObjetMesh(&raziel)    ;
-		//afficheObjetTexture(&cube)  ;
+		//afficheObjetMesh(&raziel)    ;
+		afficheObjetTexture(&raziel)  ;
 		
 		/////---------------------------dessin des images 2D--------------------------------///////
 		
@@ -433,7 +436,7 @@ int   main(int  argc , char**  argv)
 			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
 		}
 		
-		if(keystates[SDL_SCANCODE_S] && (raziel.centre.z > 1500))
+		if(keystates[SDL_SCANCODE_S] && (raziel.centre.z > 500))
 		{
 			//translation(&cube , 0 , 0 , -5)    ;
 			Dz    -=   5           ;
@@ -729,7 +732,6 @@ int   main(int  argc , char**  argv)
     		SDL_Delay((1000 / FRAMES_PER_SECOND) - (Uint32)elapsed);
 		}
 
-		//
 		//printf("FPS = %i\n", (FPS += 1000 / elapsed)/i++)   ;
 	}
 	
@@ -3353,7 +3355,21 @@ Point   calculateFaceNormal(Point* nrm, Point* v1, Point* v2, Point* v3)
 
 bool loadOBJfile(const  char*  path, Objet*  objet) 
 {
-    FILE*  file    =    fopen(path, "r")    ;
+    // extract directory from path to handle relative texture paths
+	FILE*  file    =    fopen(path, "r")    ;	
+	char   dirPath[256]                     ;
+
+	const  char*   lastSlashPtr  =   strrchr(path, '/')  ;
+	if (lastSlashPtr == NULL) 
+	{
+		dirPath[0]  =   '\0'   ; // No directory found
+	}
+	else
+	{
+		int   dirLength     =   lastSlashPtr - path + 1    ;
+		strncpy(dirPath, path, dirLength)                  ;
+		dirPath[dirLength]  =   '\0'                       ; // Null-terminate the directory path
+	} 
 
     if (!file) 
 	{
@@ -3361,25 +3377,64 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
         return   false   ;
     }
 
-    objet->nbrePts    =   0   ;
-    objet->nbreFace   =   0   ;
+    objet->nbrePts       =   0   ;
+    objet->nbreFace      =   0   ;
 	objet->nbreSegment   =   0   ;
 
 	objet->centre.x   =     0      ;
-	objet->centre.y   =     0      ;
-	objet->centre.z   =  2000      ;
+	objet->centre.y   =   200      ;
+	objet->centre.z   =  1000      ;
 
-	objet->angleX   =     0.0      ;
+	objet->angleX   =      PI      ;
 	objet->angleY   =     0.0      ;
 	objet->angleZ   =     0.0      ;
 	objet->echell   =     1.0      ;
 
-    char   line[256]          ;
+    char   line[256]              ;
+
+	int   UV[NBRE_POINT_MAX][2]   ;	
+	int   uvCount   =        0    ;
 
     while (fgets(line, sizeof(line), file)) 
-	{
+	{				
+		// Parse Material Library
+		if((strncmp(line, "mtllib", 6) == 0))
+		{
+			char   mtlFile[256]   ;
+			sscanf(line, "mtllib %s", mtlFile)   ;
+
+			char     fullMtlPath[256]            ;
+            snprintf(fullMtlPath, sizeof(fullMtlPath), "%s%s", dirPath, mtlFile)    ;
+			
+			FILE*  f   =   fopen(fullMtlPath, "r")   ;
+
+			if (!f) 
+			{
+				SDL_Log("Could not open mtlFile: %s", mtlFile)   ;
+				fclose(file)     ;
+				return   false   ;
+			}
+
+		    char   l[256]        ;
+
+			while (fgets(l, sizeof(l), f)) 
+			{
+				if((strncmp(l, "map_Kd", 6) == 0))
+				{
+					// Handle texture mapping
+					char      textureFile[256]    ;	
+					char      texturePath[256]    ;	
+
+					sscanf(l, "map_Kd %s", textureFile)   ;
+					snprintf(texturePath, sizeof(texturePath), "%s%s", dirPath, textureFile)    ;
+					
+					objet->texture   =   chargerImage(texturePath)   ;
+				}
+			}
+		}
+
 		// Parse Vertices
-        if (line[0] == 'v' && line[1] == ' ') 
+		if (line[0] == 'v' && line[1] == ' ') 
 		{
             float   x, y, z   ;
 
@@ -3395,45 +3450,70 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
 			objet->nbrePts++     ;
 			//printf("Vertex %d: (%d, %d, %d)\n", objet->nbrePts, objet->ptsOrg[objet->nbrePts-1].x, objet->ptsOrg[objet->nbrePts-1].y, objet->ptsOrg[objet->nbrePts-1].z)   ;
         }
-			
+
+		// Parse Texture Coordinates
+		if ((line[0] == 'v') && (line[1] == 't')) 
+		{
+			float   u, v   ;
+
+			sscanf(line, "vt %f %f", &u, &v)     ;
+
+			// Store texture coordinates
+			UV[uvCount][0]    =   (int)(u * objet->texture->w)            ;
+			UV[uvCount][1]    =   (int)((1.0f - v) * objet->texture->h)   ;
+
+			uvCount++    ;
+		}
+
 		// Parse Faces (Triangles)
 		if (line[0] == 'f' && line[1] == ' ') 
 		{
 			int   v1[3], v2[3], v3[3]     ;
 
 			// OBJ indices start at 1, so we subtract 1
-			sscanf(line, "f %d/%d/%d %d/%d/%d %d/%d/%d", &v1[0], &v1[1], &v1[2], &v2[0], &v2[1], &v2[2], &v3[0], &v3[1], &v3[2])   ;
+			if((sscanf(line, "f %d/%d/%d %d/%d/%d %d/%d/%d", &v1[0], &v1[1], &v1[2], &v2[0], &v2[1], &v2[2], &v3[0], &v3[1], &v3[2]) == 9) || 
+			   (sscanf(line, "f %d/%d %d/%d %d/%d", &v1[0], &v1[1], &v2[0], &v2[1], &v3[0], &v3[1]) == 6))
+			{
+				objet->faces[objet->nbreFace][0]    =    &objet->points[v1[0] - 1]    ;
+				objet->faces[objet->nbreFace][1]    =    &objet->points[v2[0] - 1]    ;
+				objet->faces[objet->nbreFace][2]    =    &objet->points[v3[0] - 1]    ;
 
-			objet->faces[objet->nbreFace][0]    =    &objet->points[v1[0] - 1]    ;
-			objet->faces[objet->nbreFace][1]    =    &objet->points[v2[0] - 1]    ;
-			objet->faces[objet->nbreFace][2]    =    &objet->points[v3[0] - 1]    ;
+				calculateFaceNormal(&objet->nrmOrg[objet->nbreFace], objet->faces[objet->nbreFace][0], objet->faces[objet->nbreFace][1], objet->faces[objet->nbreFace][2])   ;
 
-			calculateFaceNormal(&objet->nrmOrg[objet->nbreFace], objet->faces[objet->nbreFace][0], objet->faces[objet->nbreFace][1], objet->faces[objet->nbreFace][2])   ;
+				objet->normale[objet->nbreFace]     =   objet->nrmOrg[objet->nbreFace]     ;
 
-			objet->normale[objet->nbreFace]     =   objet->nrmOrg[objet->nbreFace]     ;
+				objet->faces[objet->nbreFace][3]    =   &objet->normale[objet->nbreFace]   ;
+								
+				// Store the segments for the face		
+				
+				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace][0]     ;
+				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace][1]     ;
+				objet->nbreSegment++    ;
 
-			objet->faces[objet->nbreFace][3]    =   &objet->normale[objet->nbreFace]   ;
-			//printf("Face normal %d: (%d, %d, %d)\n", objet->nbreFace, objet->faces[objet->nbreFace][3]->x, objet->faces[objet->nbreFace][3]->y, objet->faces[objet->nbreFace][3]->z)   ; 
-			
-			// Store the segments for the face		
-			
-			objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace][0]     ;
-			objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace][1]     ;
-			objet->nbreSegment++    ;
+				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace][1]     ;
+				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace][2]     ;
+				objet->nbreSegment++    ;
 
-			objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace][1]     ;
-			objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace][2]     ;
-			objet->nbreSegment++    ;
+				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace][2]     ;
+				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace][0]     ;
+				objet->nbreSegment++    ;
+				
+				// Store the texture coordinate
+				objet->faceTxtr[objet->nbreFace][0][0]    =   UV[v1[1] - 1][0]   ;
+				objet->faceTxtr[objet->nbreFace][0][1]    =   UV[v1[1] - 1][1]   ;
+				objet->faceTxtr[objet->nbreFace][1][0]    =   UV[v2[1] - 1][0]   ;
+				objet->faceTxtr[objet->nbreFace][1][1]    =   UV[v2[1] - 1][1]   ;
+				objet->faceTxtr[objet->nbreFace][2][0]    =   UV[v3[1] - 1][0]   ;
+				objet->faceTxtr[objet->nbreFace][2][1]    =   UV[v3[1] - 1][1]   ;
 
-			objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace][2]     ;
-			objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace][0]     ;
-			objet->nbreSegment++    ;
-
-			//printf("Segment %d: (%d, %d, %d) to (%d, %d, %d)\n", objet->nbreSegment-3, objet->segments[objet->nbreSegment-3][0]->x, objet->segments[objet->nbreSegment-3][0]->y, objet->segments[objet->nbreSegment-3][0]->z, objet->segments[objet->nbreSegment-3][1]->x, objet->segments[objet->nbreSegment-3][1]->y, objet->segments[objet->nbreSegment-3][1]->z)   ;
-			//printf("Segment %d: (%d, %d, %d) to (%d, %d, %d)\n", objet->nbreSegment-2, objet->segments[objet->nbreSegment-2][0]->x, objet->segments[objet->nbreSegment-2][0]->y, objet->segments[objet->nbreSegment-2][0]->z, objet->segments[objet->nbreSegment-2][1]->x, objet->segments[objet->nbreSegment-2][1]->y, objet->segments[objet->nbreSegment-2][1]->z)   ;
-			//printf("Segment %d: (%d, %d, %d) to (%d, %d, %d)\n", objet->nbreSegment-1, objet->segments[objet->nbreSegment-1][0]->x, objet->segments[objet->nbreSegment-1][0]->y, objet->segments[objet->nbreSegment-1][0]->z, objet->segments[objet->nbreSegment-1][1]->x, objet->segments[objet->nbreSegment-1][1]->y, objet->segments[objet->nbreSegment-1][1]->z)   ;
-
-			objet->nbreFace++    ;
+				objet->nbreFace++    ;
+			}
+			else
+			{
+				SDL_Log("Failed to parse face line: %s", line[0])   ;
+				fclose(file)    ;
+				return   false  ;
+			}
 		}
     }
 
