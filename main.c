@@ -40,10 +40,11 @@ typedef     MIX_Audio Mix_Music  ;
 
 #define   PI 3.14159265358979323846
 
-#define   NBRE_POINT_MAX    5000
-#define   NBRE_SEG_MAX      6000
-#define   NBRE_OBJET_MAX     100
-#define   NBRE_FACE_MAX     2000
+#define   NBRE_POINT_MAX       5000
+#define   NBRE_SEG_MAX         6000
+#define   NBRE_OBJET_MAX        100
+#define   NBRE_FACE_MAX        2000
+#define   NBRE_FACE_MAX_SCENE  3000
 
 #define   DISTANCE           512
 #define   RES_VERT           600
@@ -51,11 +52,9 @@ typedef     MIX_Audio Mix_Music  ;
 #define   RES_VERT_DIV_2     300
 #define   RES_HORIZ_DIV_2    400
 
-#define   FRAMES_PER_SECOND   60 
-
+#define   FRAMES_PER_SECOND   600 
 
 ////-------------------------variables globales-------------------------------------/////
-
 
 // The "affichage" in SDL 1.2 was the screen.
 // In SDL3, "affichage" is a CPU buffer we create manually.
@@ -111,6 +110,15 @@ typedef  struct  point
 	int   Y  ;
 }  Point  ;
 
+typedef  struct  face
+{
+	Point*         vertices[3]  ;
+	Point          normale      ;
+	Point          nrmOrg       ;
+	int            uv[3][2]     ;
+	SDL_Surface*   texture      ;
+}  Face  ;
+
 typedef  struct  objet
 {
 	int     nbrePts                     ;
@@ -120,12 +128,9 @@ typedef  struct  objet
 	int     nbreSegment                 ;
 	Point*  segments[NBRE_SEG_MAX][2]   ;
 
-	int     nbreFace                       ;
-	Point*  faces[NBRE_FACE_MAX][4]        ;
-	Point   normale[NBRE_FACE_MAX]         ;
-	Point   nrmOrg[NBRE_FACE_MAX]          ;
-	int     faceTxtr[NBRE_FACE_MAX][3][2]  ;
-	SDL_Surface*   texture                 ;
+	int     nbreFace                    ;
+	Face    faces[NBRE_FACE_MAX]        ;
+	SDL_Surface*   texture              ;
 	
 	Point   centre             ;
 	float   angleX             ;
@@ -142,9 +147,7 @@ typedef  struct  objets
 	Objet    toutObjet[NBRE_OBJET_MAX]    ;
 }  Objets  ;
 
-
 ////-------------------------------variables globales-------------------------------------/////
-
 
 void    initialisation(Objet* cube)  ;
 void    initSDL(void)           ;
@@ -171,10 +174,12 @@ Point     calculateFaceNormal(Point* nrm, Point* v1, Point* v2, Point* v3)     ;
 void      chargementFichirs()        ;
 bool      Mix_OpenAudio()            ;
 void      cleanUp()                  ;
+void      painterAlgorithmSort()     ;
 
+// an array to hold all the faces and their texture of the entire scene
 
-
-
+Face*        faces[NBRE_FACE_MAX_SCENE]    ;
+int          nbreFaceScene        =   0    ;
 
 ////--------------------------------Fonction principale-------------------------------------/////
 
@@ -187,13 +192,15 @@ int   main(int  argc , char**  argv)
 	//Uint8 *     keystates     ;
 	SDL_Rect    rectSrc         ;
 	SDL_Rect    rectDst         ;
-	
+
 	int         FPS  =   0      ;
 	int         i    =   1      ;
 	int         temps           ;
 	int         Dx   =   0      ;
 	int         Dy   =   0      ;
 	int         Dz   =   0      ;
+
+	nbreFaceScene = 0           ;
 	
 	initialisation(&cube)                       ;
 	loadOBJfile("Raziel/Raziel.obj", &raziel)   ;
@@ -732,7 +739,7 @@ int   main(int  argc , char**  argv)
     		SDL_Delay((1000 / FRAMES_PER_SECOND) - (Uint32)elapsed);
 		}
 
-		//printf("FPS = %i\n", (FPS += 1000 / elapsed)/i++)   ;
+		printf("FPS = %i\n", (FPS += 1000 / elapsed)/i++)   ;
 	}
 	
 	//attendreTouche()          ;
@@ -1320,129 +1327,123 @@ void    initialisation(Objet*  cube)
 	cube->segments[11][0]   =   &(cube->points[3])   ;
 	cube->segments[11][1]   =   &(cube->points[7])   ;
 
-	cube->nbreFace          =   12                   ;
-	cube->faces[0][0]       =   &(cube->points[0])   ;
-	cube->faces[0][1]       =   &(cube->points[2])   ;
-	cube->faces[0][2]       =   &(cube->points[1])   ;
-	cube->faces[1][0]       =   &(cube->points[0])   ;
-	cube->faces[1][1]       =   &(cube->points[3])   ;
-	cube->faces[1][2]       =   &(cube->points[2])   ;
-	cube->faces[2][0]       =   &(cube->points[0])   ;
-	cube->faces[2][1]       =   &(cube->points[4])   ;
-	cube->faces[2][2]       =   &(cube->points[3])   ;
-	cube->faces[3][0]       =   &(cube->points[3])   ;
-	cube->faces[3][1]       =   &(cube->points[4])   ;
-	cube->faces[3][2]       =   &(cube->points[7])   ;
-	cube->faces[4][0]       =   &(cube->points[7])   ;
-	cube->faces[4][1]       =   &(cube->points[4])   ;
-	cube->faces[4][2]       =   &(cube->points[5])   ;
-	cube->faces[5][0]       =   &(cube->points[5])   ;
-	cube->faces[5][1]       =   &(cube->points[6])   ;
-	cube->faces[5][2]       =   &(cube->points[7])   ;
-	cube->faces[6][0]       =   &(cube->points[6])   ;
-	cube->faces[6][1]       =   &(cube->points[5])   ;
-	cube->faces[6][2]       =   &(cube->points[1])   ;
-	cube->faces[7][0]       =   &(cube->points[1])   ;
-	cube->faces[7][1]       =   &(cube->points[2])   ;
-	cube->faces[7][2]       =   &(cube->points[6])   ;
-	cube->faces[8][0]       =   &(cube->points[2])   ;
-	cube->faces[8][1]       =   &(cube->points[3])   ;
-	cube->faces[8][2]       =   &(cube->points[6])   ;
-	cube->faces[9][0]       =   &(cube->points[3])   ;
-	cube->faces[9][1]       =   &(cube->points[7])   ;
-	cube->faces[9][2]       =   &(cube->points[6])   ;
-	cube->faces[10][0]      =   &(cube->points[1])   ;
-	cube->faces[10][1]      =   &(cube->points[5])   ;
-	cube->faces[10][2]      =   &(cube->points[4])   ;
-	cube->faces[11][0]      =   &(cube->points[0])   ;
-	cube->faces[11][1]      =   &(cube->points[1])   ;
-	cube->faces[11][2]      =   &(cube->points[4])   ;
-
-
-	for(i = 0 ; i < cube->nbreFace ; i++)
-	{
-		cube->normale[i].x    =    cube->nrmOrg[i].x    =     normales[i].x    ;
-		cube->normale[i].y    =    cube->nrmOrg[i].y    =     normales[i].y    ;
-		cube->normale[i].z    =    cube->nrmOrg[i].z    =     normales[i].z    ;
-	}
+	cube->nbreFace                   =   12                   ;
+	cube->faces[0].vertices[0]       =   &(cube->points[0])   ;
+	cube->faces[0].vertices[1]       =   &(cube->points[2])   ;
+	cube->faces[0].vertices[2]       =   &(cube->points[1])   ;
+	cube->faces[1].vertices[0]       =   &(cube->points[0])   ;
+	cube->faces[1].vertices[1]       =   &(cube->points[3])   ;
+	cube->faces[1].vertices[2]       =   &(cube->points[2])   ;
+	cube->faces[2].vertices[0]       =   &(cube->points[0])   ;
+	cube->faces[2].vertices[1]       =   &(cube->points[4])   ;
+	cube->faces[2].vertices[2]       =   &(cube->points[3])   ;
+	cube->faces[3].vertices[0]       =   &(cube->points[3])   ;
+	cube->faces[3].vertices[1]       =   &(cube->points[4])   ;
+	cube->faces[3].vertices[2]       =   &(cube->points[7])   ;
+	cube->faces[4].vertices[0]       =   &(cube->points[7])   ;
+	cube->faces[4].vertices[1]       =   &(cube->points[4])   ;
+	cube->faces[4].vertices[2]       =   &(cube->points[5])   ;
+	cube->faces[5].vertices[0]       =   &(cube->points[5])   ;
+	cube->faces[5].vertices[1]       =   &(cube->points[6])   ;
+	cube->faces[5].vertices[2]       =   &(cube->points[7])   ;
+	cube->faces[6].vertices[0]       =   &(cube->points[6])   ;
+	cube->faces[6].vertices[1]       =   &(cube->points[5])   ;
+	cube->faces[6].vertices[2]       =   &(cube->points[1])   ;
+	cube->faces[7].vertices[0]       =   &(cube->points[1])   ;
+	cube->faces[7].vertices[1]       =   &(cube->points[2])   ;
+	cube->faces[7].vertices[2]       =   &(cube->points[6])   ;
+	cube->faces[8].vertices[0]       =   &(cube->points[2])   ;
+	cube->faces[8].vertices[1]       =   &(cube->points[3])   ;
+	cube->faces[8].vertices[2]       =   &(cube->points[6])   ;
+	cube->faces[9].vertices[0]       =   &(cube->points[3])   ;
+	cube->faces[9].vertices[1]       =   &(cube->points[7])   ;
+	cube->faces[9].vertices[2]       =   &(cube->points[6])   ;
+	cube->faces[10].vertices[0]      =   &(cube->points[1])   ;
+	cube->faces[10].vertices[1]      =   &(cube->points[5])   ;
+	cube->faces[10].vertices[2]      =   &(cube->points[4])   ;
+	cube->faces[11].vertices[0]      =   &(cube->points[0])   ;
+	cube->faces[11].vertices[1]      =   &(cube->points[1])   ;
+	cube->faces[11].vertices[2]      =   &(cube->points[4])   ;
 
 	for(i = 0 ; i < cube->nbreFace ; i++)
 	{
-		cube->faces[i][3]   =    &(cube->normale[i])    ;
+		cube->faces[i].normale.x    =    cube->faces[i].nrmOrg.x    =     normales[i].x    ;
+		cube->faces[i].normale.y    =    cube->faces[i].nrmOrg.y    =     normales[i].y    ;
+		cube->faces[i].normale.z    =    cube->faces[i].nrmOrg.z    =     normales[i].z    ;
 	}
 
-	cube->faceTxtr[0][0][0]     =    255 + 181  ;
-	cube->faceTxtr[0][0][1]     =    511 + 181  ;
-	cube->faceTxtr[0][1][0]     =      0 + 181  ;
-	cube->faceTxtr[0][1][1]     =    255 + 181  ;
-	cube->faceTxtr[0][2][0]     =      0 + 181  ;
-	cube->faceTxtr[0][2][1]     =    511 + 181  ;
-	cube->faceTxtr[1][0][0]     =    255 + 181  ;
-	cube->faceTxtr[1][0][1]     =    511 + 181  ;
-	cube->faceTxtr[1][1][0]     =    255 + 181  ;
-	cube->faceTxtr[1][1][1]     =    255 + 181  ;
-	cube->faceTxtr[1][2][0]     =      0 + 181  ;
-	cube->faceTxtr[1][2][1]     =    255 + 181  ;
-	cube->faceTxtr[2][0][0]     =    255 + 181  ;
-	cube->faceTxtr[2][0][1]     =    511 + 181  ;
-	cube->faceTxtr[2][1][0]     =    511 + 181  ;
-	cube->faceTxtr[2][1][1]     =    511 + 181  ;
-	cube->faceTxtr[2][2][0]     =    255 + 181  ;
-	cube->faceTxtr[2][2][1]     =    255 + 181  ;
-	cube->faceTxtr[3][0][0]     =    255 + 181  ;
-	cube->faceTxtr[3][0][1]     =    255 + 181  ;
-	cube->faceTxtr[3][1][0]     =    511 + 181  ;
-	cube->faceTxtr[3][1][1]     =    511 + 181  ;
-	cube->faceTxtr[3][2][0]     =    511 + 181  ;
-	cube->faceTxtr[3][2][1]     =    255 + 181  ;
-	cube->faceTxtr[4][0][0]     =    511 + 181  ;
-	cube->faceTxtr[4][0][1]     =    255 + 181  ;
-	cube->faceTxtr[4][1][0]     =    511 + 181  ;
-	cube->faceTxtr[4][1][1]     =    511 + 181  ;
-	cube->faceTxtr[4][2][0]     =    767 + 181  ;
-	cube->faceTxtr[4][2][1]     =    511 + 181  ;
-	cube->faceTxtr[5][0][0]     =    767 + 181  ;
-	cube->faceTxtr[5][0][1]     =    511 + 181  ;
-	cube->faceTxtr[5][1][0]     =    767 + 181  ;
-	cube->faceTxtr[5][1][1]     =    255 + 181  ;
-	cube->faceTxtr[5][2][0]     =    511 + 181  ;
-	cube->faceTxtr[5][2][1]     =    255 + 181  ;
-	cube->faceTxtr[6][0][0]     =    767 + 181  ;
-	cube->faceTxtr[6][0][1]     =    255 + 181  ;
-	cube->faceTxtr[6][1][0]     =    767 + 181  ;
-	cube->faceTxtr[6][1][1]     =    511 + 181  ;
-	cube->faceTxtr[6][2][0]     =   1023 + 181  ;
-	cube->faceTxtr[6][2][1]     =    511 + 181  ;
-	cube->faceTxtr[7][0][0]     =   1023 + 181  ;
-	cube->faceTxtr[7][0][1]     =    511 + 181  ;
-	cube->faceTxtr[7][1][0]     =   1023 + 181  ;
-	cube->faceTxtr[7][1][1]     =    255 + 181  ;
-	cube->faceTxtr[7][2][0]     =    767 + 181  ;
-	cube->faceTxtr[7][2][1]     =    255 + 181  ;
-	cube->faceTxtr[8][0][0]     =      0 + 181  ;
-	cube->faceTxtr[8][0][1]     =    255 + 181  ;
-	cube->faceTxtr[8][1][0]     =    255 + 181  ;
-	cube->faceTxtr[8][1][1]     =    255 + 181  ;
-	cube->faceTxtr[8][2][0]     =      0 + 181  ;
-	cube->faceTxtr[8][2][1]     =      0 + 181  ;
-	cube->faceTxtr[9][0][0]     =    255 + 181  ;
-	cube->faceTxtr[9][0][1]     =    255 + 181  ;
-	cube->faceTxtr[9][1][0]     =    255 + 181  ;
-	cube->faceTxtr[9][1][1]     =      0 + 181  ;
-	cube->faceTxtr[9][2][0]     =      0 + 181  ;
-	cube->faceTxtr[9][2][1]     =      0 + 181  ;
-	cube->faceTxtr[10][0][0]    =      0 + 181  ;
-	cube->faceTxtr[10][0][1]    =    511 + 181  ;
-	cube->faceTxtr[10][1][0]    =      0 + 181  ;
-	cube->faceTxtr[10][1][1]    =    767 + 181  ;
-	cube->faceTxtr[10][2][0]    =    255 + 181  ;
-	cube->faceTxtr[10][2][1]    =    767 + 181  ;
-	cube->faceTxtr[11][0][0]    =    255 + 181  ;
-	cube->faceTxtr[11][0][1]    =    511 + 181  ;
-	cube->faceTxtr[11][1][0]    =      0 + 181  ;
-	cube->faceTxtr[11][1][1]    =    511 + 181  ;
-	cube->faceTxtr[11][2][0]    =    255 + 181  ;
-	cube->faceTxtr[11][2][1]    =    767 + 181  ;
+	cube->faces[0].uv[0][0]     =    255 + 181  ;
+	cube->faces[0].uv[0][1]     =    511 + 181  ;
+	cube->faces[0].uv[1][0]     =      0 + 181  ;
+	cube->faces[0].uv[1][1]     =    255 + 181  ;
+	cube->faces[0].uv[2][0]     =      0 + 181  ;
+	cube->faces[0].uv[2][1]     =    511 + 181  ;
+	cube->faces[1].uv[0][0]     =    255 + 181  ;
+	cube->faces[1].uv[0][1]     =    511 + 181  ;
+	cube->faces[1].uv[1][0]     =    255 + 181  ;
+	cube->faces[1].uv[1][1]     =    255 + 181  ;
+	cube->faces[1].uv[2][0]     =      0 + 181  ;
+	cube->faces[1].uv[2][1]     =    255 + 181  ;
+	cube->faces[2].uv[0][0]     =    255 + 181  ;
+	cube->faces[2].uv[0][1]     =    511 + 181  ;
+	cube->faces[2].uv[1][0]     =    511 + 181  ;
+	cube->faces[2].uv[1][1]     =    511 + 181  ;
+	cube->faces[2].uv[2][0]     =    255 + 181  ;
+	cube->faces[2].uv[2][1]     =    255 + 181  ;
+	cube->faces[3].uv[0][0]     =    255 + 181  ;
+	cube->faces[3].uv[0][1]     =    255 + 181  ;
+	cube->faces[3].uv[1][0]     =    511 + 181  ;
+	cube->faces[3].uv[1][1]     =    511 + 181  ;
+	cube->faces[3].uv[2][0]     =    511 + 181  ;
+	cube->faces[3].uv[2][1]     =    255 + 181  ;
+	cube->faces[4].uv[0][0]     =    511 + 181  ;
+	cube->faces[4].uv[0][1]     =    255 + 181  ;
+	cube->faces[4].uv[1][0]     =    511 + 181  ;
+	cube->faces[4].uv[1][1]     =    511 + 181  ;
+	cube->faces[4].uv[2][0]     =    767 + 181  ;
+	cube->faces[4].uv[2][1]     =    511 + 181  ;
+	cube->faces[5].uv[0][0]     =    767 + 181  ;
+	cube->faces[5].uv[0][1]     =    511 + 181  ;
+	cube->faces[5].uv[1][0]     =    767 + 181  ;
+	cube->faces[5].uv[1][1]     =    255 + 181  ;
+	cube->faces[5].uv[2][0]     =    511 + 181  ;
+	cube->faces[5].uv[2][1]     =    255 + 181  ;
+	cube->faces[6].uv[0][0]     =    767 + 181  ;
+	cube->faces[6].uv[0][1]     =    255 + 181  ;
+	cube->faces[6].uv[1][0]     =    767 + 181  ;
+	cube->faces[6].uv[1][1]     =    511 + 181  ;
+	cube->faces[6].uv[2][0]     =   1023 + 181  ;
+	cube->faces[6].uv[2][1]     =    511 + 181  ;
+	cube->faces[7].uv[0][0]     =   1023 + 181  ;
+	cube->faces[7].uv[0][1]     =    511 + 181  ;
+	cube->faces[7].uv[1][0]     =   1023 + 181  ;
+	cube->faces[7].uv[1][1]     =    255 + 181  ;
+	cube->faces[7].uv[2][0]     =    767 + 181  ;
+	cube->faces[7].uv[2][1]     =    255 + 181  ;
+	cube->faces[8].uv[0][0]     =      0 + 181  ;
+	cube->faces[8].uv[0][1]     =    255 + 181  ;
+	cube->faces[8].uv[1][0]     =    255 + 181  ;
+	cube->faces[8].uv[1][1]     =    255 + 181  ;
+	cube->faces[8].uv[2][0]     =      0 + 181  ;
+	cube->faces[8].uv[2][1]     =      0 + 181  ;
+	cube->faces[9].uv[0][0]     =    255 + 181  ;
+	cube->faces[9].uv[0][1]     =    255 + 181  ;
+	cube->faces[9].uv[1][0]     =    255 + 181  ;
+	cube->faces[9].uv[1][1]     =      0 + 181  ;
+	cube->faces[9].uv[2][0]     =      0 + 181  ;
+	cube->faces[9].uv[2][1]     =      0 + 181  ;
+	cube->faces[10].uv[0][0]    =      0 + 181  ;
+	cube->faces[10].uv[0][1]    =    511 + 181  ;
+	cube->faces[10].uv[1][0]    =      0 + 181  ;
+	cube->faces[10].uv[1][1]    =    767 + 181  ;
+	cube->faces[10].uv[2][0]    =    255 + 181  ;
+	cube->faces[10].uv[2][1]    =    767 + 181  ;
+	cube->faces[11].uv[0][0]    =    255 + 181  ;
+	cube->faces[11].uv[0][1]    =    511 + 181  ;
+	cube->faces[11].uv[1][0]    =      0 + 181  ;
+	cube->faces[11].uv[1][1]    =    511 + 181  ;
+	cube->faces[11].uv[2][0]    =    255 + 181  ;
+	cube->faces[11].uv[2][1]    =    767 + 181  ;
 	
 	cube->angleX     =   0.0        ;
 	cube->angleY     =   0.0        ;
@@ -1505,7 +1506,7 @@ void    afficheObjetMesh(Objet*  mesh)
 
 	return   ;
 }
-
+// I need to make this function more generic so that it can handle different all object of the scene.
 void    afficheObjetTexture(Objet*  obj3D)
 {
 	int    i , j , k    ;
@@ -1520,26 +1521,28 @@ void    afficheObjetTexture(Objet*  obj3D)
 
 	////--------------------------dessin des faces---------------------------------//////
 
-	for(i = 0 ; i < obj3D->nbreFace ; i++)
+	painterAlgorithmSort()  ;
+	
+	for(i = 0 ; i < nbreFaceScene ; i++)
 	{		
-		if((((obj3D->faces[i][3]->x * (obj3D->faces[i][0]->X - (RES_HORIZ / 2))) + (obj3D->faces[i][3]->y * (obj3D->faces[i][0]->Y - (RES_VERT  / 2))) + (obj3D->faces[i][3]->z * DISTANCE)) < 0) && ((obj3D->faces[i][0]->X > 0) || (obj3D->faces[i][1]->X > 0) || (obj3D->faces[i][2]->X > 0)) && ((obj3D->faces[i][0]->X < (RES_HORIZ-1)) || (obj3D->faces[i][1]->X < (RES_HORIZ-1)) || (obj3D->faces[i][2]->X < (RES_HORIZ-1))) && ((obj3D->faces[i][0]->Y > 0) || (obj3D->faces[i][1]->Y > 0) || (obj3D->faces[i][2]->Y > 0)) && ((obj3D->faces[i][0]->Y < (RES_VERT-1)) || (obj3D->faces[i][1]->Y < (RES_VERT-1)) || (obj3D->faces[i][2]->Y < (RES_VERT-1))))
+		if((((faces[i]->normale.x * (faces[i]->vertices[0]->X - (RES_HORIZ / 2))) + (faces[i]->normale.y * (faces[i]->vertices[0]->Y - (RES_VERT  / 2))) + (faces[i]->normale.z * DISTANCE)) < 0) && ((faces[i]->vertices[0]->X > 0) || (faces[i]->vertices[1]->X > 0) || (faces[i]->vertices[2]->X > 0)) && ((faces[i]->vertices[0]->X < (RES_HORIZ-1)) || (faces[i]->vertices[1]->X < (RES_HORIZ-1)) || (faces[i]->vertices[2]->X < (RES_HORIZ-1))) && ((faces[i]->vertices[0]->Y > 0) || (faces[i]->vertices[1]->Y > 0) || (faces[i]->vertices[2]->Y > 0)) && ((faces[i]->vertices[0]->Y < (RES_VERT-1)) || (faces[i]->vertices[1]->Y < (RES_VERT-1)) || (faces[i]->vertices[2]->Y < (RES_VERT-1))))
 		{	
 			int    haut   =   0      ;
 			int    bas , millieu     ;
 			int    baleillage , dis  ;
 			
 			
-			if(obj3D->faces[i][0]->Y > obj3D->faces[i][1]->Y)
+			if(faces[i]->vertices[0]->Y > faces[i]->vertices[1]->Y)
 			{
 				haut   =   1   ;
 			}
 			
-			if(obj3D->faces[i][haut]->Y > obj3D->faces[i][2]->Y)
+			if(faces[i]->vertices[haut]->Y > faces[i]->vertices[2]->Y)
 			{
 				haut   =   2   ;
 			}
 			
-			if(obj3D->faces[i][(haut+1)%3]->Y > obj3D->faces[i][(haut+2)%3]->Y)
+			if(faces[i]->vertices[(haut+1)%3]->Y > faces[i]->vertices[(haut+2)%3]->Y)
 			{
 				millieu    =   (haut+2)%3   ;
 				bas        =   (haut+1)%3   ;
@@ -1554,12 +1557,12 @@ void    afficheObjetTexture(Objet*  obj3D)
 			
 			///////---------------------------------------------------------------//////////
 			
-			int    X0    =   obj3D->faces[i][haut]->X       ;
-			int    Y0    =   obj3D->faces[i][haut]->Y       ;
-			int    X1    =   obj3D->faces[i][millieu]->X    ;
-			int    Y1    =   obj3D->faces[i][millieu]->Y    ;
-			int    X2    =   obj3D->faces[i][bas]->X        ;
-			int    Y2    =   obj3D->faces[i][bas]->Y        ;
+			int    X0    =   faces[i]->vertices[haut]->X       ;
+			int    Y0    =   faces[i]->vertices[haut]->Y       ;
+			int    X1    =   faces[i]->vertices[millieu]->X    ;
+			int    Y1    =   faces[i]->vertices[millieu]->Y    ;
+			int    X2    =   faces[i]->vertices[bas]->X        ;
+			int    Y2    =   faces[i]->vertices[bas]->Y        ;
 			
 			int    Dx0  =  X1 - X0   ;
 			int    Dy0  =  Y1 - Y0   ;
@@ -1634,10 +1637,10 @@ void    afficheObjetTexture(Objet*  obj3D)
 			
 			///////---------------------------------------------------------------//////////
 			
-			int    XV0    =   obj3D->faceTxtr[i][haut][0]     ;
-			int    YV0    =   obj3D->faceTxtr[i][haut][1]     ;
-			int    XV1    =   obj3D->faceTxtr[i][bas][0]      ;
-			int    YV1    =   obj3D->faceTxtr[i][bas][1]      ;
+			int    XV0    =   faces[i]->uv[haut][0]     ;
+			int    YV0    =   faces[i]->uv[haut][1]     ;
+			int    XV1    =   faces[i]->uv[bas][0]      ;
+			int    YV1    =   faces[i]->uv[bas][1]      ;
 			
 			int    DVx   =   XV1 - XV0   ;
 			int    DVy   =   YV1 - YV0   ;
@@ -1679,8 +1682,8 @@ void    afficheObjetTexture(Objet*  obj3D)
 			
 			int    XH0    =   XV0 + ((Y1-Y0)*distVx) + ((XV0<XV1)?1:-1) * (((((Y1-Y0)*resteVx)-DV/2)/DV) + (((((Y1-Y0)*resteVx)-DV/2)%DV)>0))     ;
 			int    YH0    =   YV0 + ((Y1-Y0)*distVy) + ((YV0<YV1)?1:-1) * (((((Y1-Y0)*resteVy)-DV/2)/DV) + (((((Y1-Y0)*resteVy)-DV/2)%DV)>0))     ;
-			int    XH1    =   obj3D->faceTxtr[i][millieu][0]      ;
-			int    YH1    =   obj3D->faceTxtr[i][millieu][1]      ;
+			int    XH1    =   faces[i]->uv[millieu][0]      ;
+			int    YH1    =   faces[i]->uv[millieu][1]      ;
 			
 			int    DHx   =   XH1 - XH0   ;
 			int    DHy   =   YH1 - YH0   ;
@@ -3013,7 +3016,7 @@ void    afficheObjetTexture(Objet*  obj3D)
 					{
 						for(j = x3 ; j <= x4 ; j++)
 						{//	printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
-							setPixel(j , y ,getPixel(xH , yH , obj3D->texture))      ;
+							setPixel(j , y ,getPixel(xH , yH , faces[i]->texture))      ;
 							
 							erreurHx   -=  resteHx       ;
 							erreurHy   -=  resteHy       ;
@@ -3042,8 +3045,8 @@ void    afficheObjetTexture(Objet*  obj3D)
 					else
 					{
 						for(j = x3 ; j >= x4 ; j--)
-						{//	printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
-							setPixel(j , y ,getPixel(xH , yH , obj3D->texture))      ;
+						{//printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
+							setPixel(j , y ,getPixel(xH , yH , faces[i]->texture))      ;
 							
 							erreurHx   -=  resteHx       ;
 							erreurHy   -=  resteHy       ;
@@ -3218,18 +3221,18 @@ static inline  void    changementEchell_rotation(Objet * objet)
 	{
 		
 		// par raport a l'axe Z
-		objet->normale[i].x   =    (objet->nrmOrg[i].x * cos(objet->angleZ)) - (objet->nrmOrg[i].y * sin(objet->angleZ))  ;
-		objet->normale[i].y   =    (objet->nrmOrg[i].x * sin(objet->angleZ)) + (objet->nrmOrg[i].y * cos(objet->angleZ))  ;
+		objet->faces[i].normale.x   =    (objet->faces[i].nrmOrg.x * cos(objet->angleZ)) - (objet->faces[i].nrmOrg.y * sin(objet->angleZ))  ;
+		objet->faces[i].normale.y   =    (objet->faces[i].nrmOrg.x * sin(objet->angleZ)) + (objet->faces[i].nrmOrg.y * cos(objet->angleZ))  ;
 		
 		// par raport a l'axe Y
-		objet->normale[i].z   =    (objet->nrmOrg[i].z * cos(objet->angleY)) - (objet->normale[i].x * sin(objet->angleY))   ;
-		objet->normale[i].x   =    (objet->nrmOrg[i].z * sin(objet->angleY)) + (objet->normale[i].x * cos(objet->angleY))   ;
+		objet->faces[i].normale.z   =    (objet->faces[i].nrmOrg.z * cos(objet->angleY)) - (objet->faces[i].normale.x * sin(objet->angleY))   ;
+		objet->faces[i].normale.x   =    (objet->faces[i].nrmOrg.z * sin(objet->angleY)) + (objet->faces[i].normale.x * cos(objet->angleY))   ;
 		
-		int    z   =  objet->normale[i].z   ;
+		int    z   =  objet->faces[i].normale.z   ;
 		
 		// par raport a l'axe X
-		objet->normale[i].z   =    (objet->normale[i].y * sin(objet->angleX)) + (z * cos(objet->angleX))   ;
-		objet->normale[i].y   =    (objet->normale[i].y * cos(objet->angleX)) - (z * sin(objet->angleX))   ;
+		objet->faces[i].normale.z   =    (objet->faces[i].normale.y * sin(objet->angleX)) + (z * cos(objet->angleX))   ;
+		objet->faces[i].normale.y   =    (objet->faces[i].normale.y * cos(objet->angleX)) - (z * sin(objet->angleX))   ;
 		
 	}
 	
@@ -3474,37 +3477,41 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
 			if((sscanf(line, "f %d/%d/%d %d/%d/%d %d/%d/%d", &v1[0], &v1[1], &v1[2], &v2[0], &v2[1], &v2[2], &v3[0], &v3[1], &v3[2]) == 9) || 
 			   (sscanf(line, "f %d/%d %d/%d %d/%d", &v1[0], &v1[1], &v2[0], &v2[1], &v3[0], &v3[1]) == 6))
 			{
-				objet->faces[objet->nbreFace][0]    =    &objet->points[v1[0] - 1]    ;
-				objet->faces[objet->nbreFace][1]    =    &objet->points[v2[0] - 1]    ;
-				objet->faces[objet->nbreFace][2]    =    &objet->points[v3[0] - 1]    ;
+				objet->faces[objet->nbreFace].vertices[0]    =    &objet->points[v1[0] - 1]    ;
+				objet->faces[objet->nbreFace].vertices[1]    =    &objet->points[v2[0] - 1]    ;
+				objet->faces[objet->nbreFace].vertices[2]    =    &objet->points[v3[0] - 1]    ;
 
-				calculateFaceNormal(&objet->nrmOrg[objet->nbreFace], objet->faces[objet->nbreFace][0], objet->faces[objet->nbreFace][1], objet->faces[objet->nbreFace][2])   ;
+				calculateFaceNormal(&objet->faces[objet->nbreFace].nrmOrg, objet->faces[objet->nbreFace].vertices[0], objet->faces[objet->nbreFace].vertices[1], objet->faces[objet->nbreFace].vertices[2])   ;
 
-				objet->normale[objet->nbreFace]     =   objet->nrmOrg[objet->nbreFace]     ;
+				objet->faces[objet->nbreFace].normale     =   objet->faces[objet->nbreFace].nrmOrg     ;
 
-				objet->faces[objet->nbreFace][3]    =   &objet->normale[objet->nbreFace]   ;
-								
 				// Store the segments for the face		
 				
-				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace][0]     ;
-				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace][1]     ;
+				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[0]     ;
+				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[1]     ;
 				objet->nbreSegment++    ;
 
-				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace][1]     ;
-				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace][2]     ;
+				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[1]     ;
+				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[2]     ;
 				objet->nbreSegment++    ;
 
-				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace][2]     ;
-				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace][0]     ;
+				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[2]     ;
+				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[0]     ;
 				objet->nbreSegment++    ;
 				
 				// Store the texture coordinate
-				objet->faceTxtr[objet->nbreFace][0][0]    =   UV[v1[1] - 1][0]   ;
-				objet->faceTxtr[objet->nbreFace][0][1]    =   UV[v1[1] - 1][1]   ;
-				objet->faceTxtr[objet->nbreFace][1][0]    =   UV[v2[1] - 1][0]   ;
-				objet->faceTxtr[objet->nbreFace][1][1]    =   UV[v2[1] - 1][1]   ;
-				objet->faceTxtr[objet->nbreFace][2][0]    =   UV[v3[1] - 1][0]   ;
-				objet->faceTxtr[objet->nbreFace][2][1]    =   UV[v3[1] - 1][1]   ;
+				objet->faces[objet->nbreFace].uv[0][0]    =   UV[v1[1] - 1][0]   ;
+				objet->faces[objet->nbreFace].uv[0][1]    =   UV[v1[1] - 1][1]   ;
+				objet->faces[objet->nbreFace].uv[1][0]    =   UV[v2[1] - 1][0]   ;
+				objet->faces[objet->nbreFace].uv[1][1]    =   UV[v2[1] - 1][1]   ;
+				objet->faces[objet->nbreFace].uv[2][0]    =   UV[v3[1] - 1][0]   ;
+				objet->faces[objet->nbreFace].uv[2][1]    =   UV[v3[1] - 1][1]   ;
+
+				objet->faces[objet->nbreFace].texture   =   objet->texture   ;
+
+				// filling the global scene with faces
+				faces[nbreFaceScene]    =    &objet->faces[objet->nbreFace]    ;
+				nbreFaceScene++    ;
 
 				objet->nbreFace++    ;
 			}
@@ -3520,4 +3527,37 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
     fclose(file)   ;
 
     return   true  ;
+}
+
+
+void   painterAlgorithmSort()
+{
+	// calculate the average Z value for each face
+	int   averageZ[NBRE_FACE_MAX_SCENE]      ;
+
+	for (int i = 0 ; i < nbreFaceScene ; i++)
+	{
+		averageZ[i]   =   (faces[i]->vertices[0]->z + faces[i]->vertices[1]->z + faces[i]->vertices[2]->z + faces[i]->vertices[2]->z)    ;
+	}
+
+	// Sort in descending order based on their average Z value (depth) using insertion sort algorithm
+	for (int i = 1 ; i < nbreFaceScene ; i++) 
+	{
+		Face*  key       =    faces[i]        ;
+		int    keyAvg    =    averageZ[i]     ;
+
+		int j = i  ;
+		while(j > 0 && keyAvg > averageZ[j - 1]) 		
+		{			
+			faces[j]     =   faces[j - 1]     ;
+			averageZ[j]  =   averageZ[j - 1]  ;
+
+			j--   ;
+		}
+
+		faces[j]     =   key     ;
+		averageZ[j]  =   keyAvg  ;
+	}
+
+	return  ;
 }
