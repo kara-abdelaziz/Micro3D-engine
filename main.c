@@ -46,13 +46,13 @@ typedef     MIX_Audio Mix_Music  ;
 #define   NBRE_FACE_MAX        2000
 #define   NBRE_FACE_MAX_SCENE  3000
 
-#define   DISTANCE           512
+#define   DISTANCE_FOCAL     512
 #define   RES_VERT           600
 #define   RES_HORIZ          800
 #define   RES_VERT_DIV_2     300
 #define   RES_HORIZ_DIV_2    400
 
-#define   FRAMES_PER_SECOND   600 
+#define   FRAMES_PER_SECOND         60 
 
 ////-------------------------variables globales-------------------------------------/////
 
@@ -141,27 +141,24 @@ typedef  struct  objet
 	int     radius             ;
 }  Objet  ;
 
-typedef  struct  objets
-{
-	int      nbreObjet                    ;
-	Objet    toutObjet[NBRE_OBJET_MAX]    ;
-}  Objets  ;
-
 ////-------------------------------variables globales-------------------------------------/////
 
-void    initialisation(Objet* cube)  ;
+void    initialisation(void)    ;
 void    initSDL(void)           ;
 void    attendreTouche(void)    ;
 void    dessinerEtoiles(void)   ;
 void    dessinerLignes(void)    ;
 void    dessinEnv2D(void)       ;
+void    displayScene()          ;
+void    loadScene()             ;
+void    cleanUp()               ;
+void    loadCube(Objet*  cube)  ;
+void    afficheObjetMesh(Objet*  mesh)    ;
 static  inline  void    translation(Objet * objet , int Dx , int Dy , int Dz)        ;
 static  inline  void    changementEchell_rotation(Objet * objet)                     ;
 static  inline  void    swap(int * a , int * b)                                      ;
-static inline   void    Mix_PlayChannel_Bridge(int ch, MIX_Audio* audio, int loops)  ;
+static  inline  void    Mix_PlayChannel_Bridge(int ch, MIX_Audio* audio, int loops) ;
 void    ligne(int x0, int y0, int x1, int y1, Uint32  couleur)    ;
-void    afficheObjetMesh(Objet*  mesh)                            ;
-void    afficheObjetTexture(Objet*  obj3D)                         ;
 void    animationRadar(int X , int Y , float R)                   ;
 void    animationTexte(void)                                      ;
 static  inline  void     setPixel(int  X , int  Y , Uint32  couleur)      ;
@@ -173,21 +170,23 @@ bool      loadOBJfile(const  char*  path, Objet*  objet)   ;
 Point     calculateFaceNormal(Point* nrm, Point* v1, Point* v2, Point* v3)     ;
 void      chargementFichirs()        ;
 bool      Mix_OpenAudio()            ;
-void      cleanUp()                  ;
 void      painterAlgorithmSort()     ;
 
-// an array to hold all the faces and their texture of the entire scene
+////------------------------------Static program variables-----------------------------------/////
 
 Face*        faces[NBRE_FACE_MAX_SCENE]    ;
-int          nbreFaceScene        =   0    ;
+int          nbreFaceScene      =   0      ;
+
+Objet*       allObjet[NBRE_OBJET_MAX]      ;
+int          nbreOjectScene     =   0      ;
+
+Objet*       controlledPlayer   =   NULL   ;
 
 ////--------------------------------Fonction principale-------------------------------------/////
 
 int   main(int  argc , char**  argv)
 {
 	int         quitter  =  1   ;
-	Objet       cube            ;
-	Objet       raziel          ;
 	
 	//Uint8 *     keystates     ;
 	SDL_Rect    rectSrc         ;
@@ -200,10 +199,7 @@ int   main(int  argc , char**  argv)
 	int         Dy   =   0      ;
 	int         Dz   =   0      ;
 
-	nbreFaceScene = 0           ;
-	
-	initialisation(&cube)                       ;
-	loadOBJfile("Raziel/Raziel.obj", &raziel)   ;
+	initialisation()            ;
 	
 	///////--------------------------------------test------------------------------------////////
 
@@ -235,16 +231,21 @@ int   main(int  argc , char**  argv)
 		/////-------------affichage de toute la scène par le changement du buffer------------///////
 		
 		dessinEnv2D()   ;
+
+		changementEchell_rotation(allObjet[1])      ;
+		allObjet[1]->angleX  +=  0.05               ;
+		allObjet[1]->angleY  +=  0.05               ;
+		allObjet[1]->angleZ  +=  0.05               ;
 		
-		changementEchell_rotation(&raziel)      ;
-		translation(&raziel, Dx, Dy, Dz)	    ;
+		changementEchell_rotation(controlledPlayer)     ;
+		translation(controlledPlayer, Dx, Dy, Dz)	    ;
 
 		Dx   =   0      ;
 		Dy   =   0      ;
 		Dz   =   0      ;
 		
-		//afficheObjetMesh(&raziel)    ;
-		afficheObjetTexture(&raziel)  ;
+		//afficheObjetMesh(controlledPlayer)    ;
+		displayScene()  ;
 		
 		/////---------------------------dessin des images 2D--------------------------------///////
 		
@@ -269,7 +270,7 @@ int   main(int  argc , char**  argv)
 		SDL_BlitSurface(entete, NULL, affichage, &rectDst)     ;
 		
 		animationTexte()                                              ;
-		animationRadar(cube.centre.x , cube.centre.z , cube.echell)   ;
+		animationRadar(controlledPlayer->centre.x , controlledPlayer->centre.z , controlledPlayer->echell)   ;
 		
 		rectSrc.h   =    40      ;
 		rectSrc.w   =    40      ;
@@ -277,7 +278,7 @@ int   main(int  argc , char**  argv)
 		if(keystates[SDL_SCANCODE_UP])
 		{
 			//changementEchell_rotation(&cube)     ;
-			raziel.angleX     -=   0.05            ;
+			controlledPlayer->angleX     -=   0.05            ;
 			
 			rectSrc.x   =   40     ;
 			rectSrc.y   =   0      ;
@@ -301,7 +302,7 @@ int   main(int  argc , char**  argv)
 		if(keystates[SDL_SCANCODE_DOWN])
 		{
 			//changementEchell_rotation(&cube)     ;
-			raziel.angleX     +=   0.05            ;
+			controlledPlayer->angleX     +=   0.05            ;
 			
 			rectSrc.x   =   80     ;
 			rectSrc.y   =   0      ;
@@ -325,7 +326,7 @@ int   main(int  argc , char**  argv)
 		if(keystates[SDL_SCANCODE_RIGHT])
         {
 			//changementEchell_rotation(&cube)     ;
-			raziel.angleY     -=   0.05            ;
+			controlledPlayer->angleY     -=   0.05            ;
 			
 			rectSrc.x   =   120    ;
 			rectSrc.y   =   0      ;
@@ -349,7 +350,7 @@ int   main(int  argc , char**  argv)
 		if(keystates[SDL_SCANCODE_LEFT])
 		{
 			//changementEchell_rotation(&cube)     ;
-			raziel.angleY     +=   0.05            ;
+			controlledPlayer->angleY     +=   0.05            ;
 			
 			rectSrc.x   =   0      ;
 			rectSrc.y   =   0      ;
@@ -373,7 +374,7 @@ int   main(int  argc , char**  argv)
 		if(keystates[SDL_SCANCODE_PAGEUP])
 		{
 			//changementEchell_rotation(&cube)     ;
-			raziel.angleZ     -=   0.05            ;
+			controlledPlayer->angleZ     -=   0.05            ;
 			
 			rectSrc.x   =   160    ;
 			rectSrc.y   =   0      ;
@@ -397,7 +398,7 @@ int   main(int  argc , char**  argv)
 		if(keystates[SDL_SCANCODE_PAGEDOWN])
 		{
 			//changementEchell_rotation(&cube)     ;
-			raziel.angleZ     +=   0.05            ;
+			controlledPlayer->angleZ     +=   0.05            ;
 			
 			rectSrc.x   =   200    ;
 			rectSrc.y   =   0      ;
@@ -418,7 +419,7 @@ int   main(int  argc , char**  argv)
 			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
 		}
 		
-		if(keystates[SDL_SCANCODE_W] && (raziel.centre.z < 12100))
+		if(keystates[SDL_SCANCODE_W] && (controlledPlayer->centre.z < 12100))
 		{
 			//translation(&cube , 0 , 0 ,  5)    ;
 			Dz    +=   5           ;
@@ -443,7 +444,7 @@ int   main(int  argc , char**  argv)
 			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
 		}
 		
-		if(keystates[SDL_SCANCODE_S] && (raziel.centre.z > 500))
+		if(keystates[SDL_SCANCODE_S] && (controlledPlayer->centre.z > 500))
 		{
 			//translation(&cube , 0 , 0 , -5)    ;
 			Dz    -=   5           ;
@@ -468,7 +469,7 @@ int   main(int  argc , char**  argv)
 			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
 		}
 		
-		if(keystates[SDL_SCANCODE_D] && (raziel.centre.x < 4500))
+		if(keystates[SDL_SCANCODE_D] && (controlledPlayer->centre.x < 4500))
 		{
 			//translation(&cube ,  5 , 0 , 0)    ;
 			Dx    +=   5           ;
@@ -493,7 +494,7 @@ int   main(int  argc , char**  argv)
 			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
 		}
 		
-		if(keystates[SDL_SCANCODE_A] && (raziel.centre.x > -4500))
+		if(keystates[SDL_SCANCODE_A] && (controlledPlayer->centre.x > -4500))
         {
 			//translation(&cube , -5 , 0 , 0)    ;
 			Dx    -=   5           ;
@@ -518,7 +519,7 @@ int   main(int  argc , char**  argv)
 			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
 		}
 		
-		if(keystates[SDL_SCANCODE_Q] && (raziel.centre.y > -4500))
+		if(keystates[SDL_SCANCODE_Q] && (controlledPlayer->centre.y > -4500))
 		{
 			//translation(&cube , 0 , -5 , 0)    ;
 			Dy    -=   5           ;
@@ -543,7 +544,7 @@ int   main(int  argc , char**  argv)
 			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
 		}
 		
-		if(keystates[SDL_SCANCODE_E] && (raziel.centre.y < 4500))
+		if(keystates[SDL_SCANCODE_E] && (controlledPlayer->centre.y < 4500))
         	{
 			//translation(&cube , 0 ,  5 , 0)    ;
 			Dy    +=   5           ;			
@@ -568,9 +569,9 @@ int   main(int  argc , char**  argv)
 			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
 		}
 		
-		if(keystates[SDL_SCANCODE_KP_PLUS] && (raziel.echell < 1.1f))
+		if(keystates[SDL_SCANCODE_KP_PLUS] && (controlledPlayer->echell < 2.0f))
 		{
-			raziel.echell     +=   0.002        ;
+			controlledPlayer->echell     +=   0.002        ;
 			//changementEchell_rotation(&cube)  ;
 			
 			rectSrc.x   =   240    ;
@@ -592,9 +593,9 @@ int   main(int  argc , char**  argv)
 			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
 		}
 		
-		if(keystates[SDL_SCANCODE_KP_MINUS] && (raziel.echell > 0.5f))
+		if(keystates[SDL_SCANCODE_KP_MINUS] && (controlledPlayer->echell > 0.5f))
         {
-			raziel.echell     -=   0.002        ;
+			controlledPlayer->echell     -=   0.002        ;
 			//changementEchell_rotation(&cube)  ;
 			
 			rectSrc.x   =   240    ;
@@ -739,7 +740,7 @@ int   main(int  argc , char**  argv)
     		SDL_Delay((1000 / FRAMES_PER_SECOND) - (Uint32)elapsed);
 		}
 
-		printf("FPS = %i\n", (FPS += 1000 / elapsed)/i++)   ;
+		//printf("FPS = %i\n", (FPS += 1000 / elapsed)/i++)   ;
 	}
 	
 	//attendreTouche()          ;
@@ -829,16 +830,24 @@ void    dessinEnv2D(void)
 	SDL_BlitSurface(message, NULL, affichage, NULL)           ;
 }
 
-static inline   void      setPixel(int  X , int  Y , Uint32  couleur)
+static inline void setPixel(int X, int Y, Uint32 couleur)
 {
-	 *((Uint32*)(affichage->pixels) + (affichage->w * Y) + X) = couleur   ;
-	 //printf("yoooo")   ;
+    // 1. Check boundaries (Note: use >= because 800 is out of bounds for an 800-wide array)
+    if (X < 0 || X >= RES_HORIZ || Y < 0 || Y >= RES_VERT) 
+    {
+        return; // Exit the function immediately. Do NOT draw, do NOT print.
+    }
+
+    // 2. If we reach here, it is safe to write to memory
+    Uint32* pixels = (Uint32*)affichage->pixels;
+    
+    // Use pitch/4 for absolute safety in 32-bit modes
+    pixels[(Y * (affichage->pitch / 4)) + X] = couleur;
 }
 
 static inline   Uint32    getPixel(int  X , int  Y , SDL_Surface*  image)
 {
 	 return    *((Uint32*)(image->pixels) + (image->w * Y) + X)    ;
-	 //printf("yoooo")   ;
 }
 
 void   ligne(int x0, int y0, int x1, int y1 , Uint32  couleur)
@@ -1215,6 +1224,11 @@ void    chargementFichirs()
 
 void    cleanUp()
 {
+	for(int i = 0; i < nbreOjectScene; i++)
+	{
+		free(allObjet[i])   ;
+	}	
+	
 	SDL_DestroySurface(arrierePlan)    ;
 	SDL_DestroySurface(message)        ;
 	SDL_DestroySurface(bouttons)       ;
@@ -1265,12 +1279,10 @@ void    cleanUp()
     SDL_Quit();
 }
 
-void    initialisation(Objet*  cube)
+void    loadCube(Objet*  cube)
 {
-	//////-------------------------------Le cube 3D------------------------------//////
+//////-------------------------------Le cube 3D------------------------------//////
 
-	int      i      ;
-	
 	Point points[8]   =  { {  500 ,  500 , -500 , 0 , 0 } , { -500 ,  500 , -500 , 0 , 0 } , { -500 , -500 , -500 , 0 , 0 } , 
                                {  500 , -500 , -500 , 0 , 0 } , {  500 ,  500 ,  500 , 0 , 0 } , { -500 ,  500 ,  500 , 0 , 0 } , 
                                { -500 , -500 ,  500 , 0 , 0 } , {  500 , -500 ,  500 , 0 , 0 } }    ;
@@ -1285,16 +1297,16 @@ void    initialisation(Objet*  cube)
 	cube->nbrePts       =   8     ;
 	cube->centre.x      =   0     ;
 	cube->centre.y      =   0     ;
-	cube->centre.z      =   2000  ;
+	cube->centre.z      =   3000  ;
 
-	for(i = 0 ; i < cube->nbrePts ; i++)
+	for(int i = 0 ; i < cube->nbrePts ; i++)
 	{
 		cube->ptsOrg[i].x    =     points[i].x    ;
 		cube->ptsOrg[i].y    =     points[i].y    ;
 		cube->ptsOrg[i].z    =     points[i].z    ;
 	}
 
-	for(i = 0 ; i < cube->nbrePts ; i++)
+	for(int i = 0 ; i < cube->nbrePts ; i++)
 	{
 		cube->points[i].x   =    cube->ptsOrg[i].x + cube->centre.x    ;
 		cube->points[i].y   =    cube->ptsOrg[i].y + cube->centre.y    ;
@@ -1365,11 +1377,11 @@ void    initialisation(Objet*  cube)
 	cube->faces[11].vertices[1]      =   &(cube->points[1])   ;
 	cube->faces[11].vertices[2]      =   &(cube->points[4])   ;
 
-	for(i = 0 ; i < cube->nbreFace ; i++)
+	for(int  i = 0 ; i < cube->nbreFace ; i++)
 	{
 		cube->faces[i].normale.x    =    cube->faces[i].nrmOrg.x    =     normales[i].x    ;
 		cube->faces[i].normale.y    =    cube->faces[i].nrmOrg.y    =     normales[i].y    ;
-		cube->faces[i].normale.z    =    cube->faces[i].nrmOrg.z    =     normales[i].z    ;
+		cube->faces[i].normale.z    =    cube->faces[i].nrmOrg.z    =     normales[i].z    ;	
 	}
 
 	cube->faces[0].uv[0][0]     =    255 + 181  ;
@@ -1450,14 +1462,65 @@ void    initialisation(Objet*  cube)
 	cube->angleZ     =   0.0        ;
 	cube->echell     =   0.6        ;
 
+	cube->texture   =  chargerImage("texture.png")       ;
 
+	for(int i = 0 ; i < cube->nbreFace ; i++)
+	{
+		cube->faces[i].texture  =  cube->texture     ;
+	}
+
+	return   ;
+}
+
+void  loadScene()
+{
+	
+	for(int  i = 0 ; i < nbreOjectScene ; i++)
+	{
+		for(int  j = 0 ; j < allObjet[i]->nbreFace ; j++)
+		{
+			faces[nbreFaceScene]    =    &allObjet[i]->faces[j]    ;
+			//printf("x=%d, y=%d, z=%d\n", faces[nbreFaceScene]->vertices[0]->x, faces[nbreFaceScene]->vertices[0]->y, faces[nbreFaceScene]->vertices[0]->z)  ;
+			nbreFaceScene++    ;
+		}
+	}
+
+	//printf("The number of faces =  %d\n", nbreFaceScene) ;
+
+	return    ;
+}	
+
+void    initialisation(void)
+{
+	///-----------------------------3D objects initialization and scene loading--------------------------------//////
+	
+	Objet*    raziel   =  malloc(sizeof(Objet))  ;
+	Objet*    cube     =  malloc(sizeof(Objet))  ;
+	Objet*    terrain  =  malloc(sizeof(Objet))  ;
+
+
+	controlledPlayer =  raziel   ;
+	
+	loadOBJfile("Raziel/Raziel.obj", raziel)   ;
+	loadOBJfile("assets/terrain.obj", terrain)       ;
+	loadCube(cube)                             ;
+
+	allObjet[0]   =   raziel   ;
+	allObjet[1]   =   cube     ;
+	allObjet[2]   =   terrain  ;
+
+	terrain->centre.z   =  3000      ;
+	terrain->angleX     =    PI      ;
+
+	nbreOjectScene   =   3     ;	
+	
+	loadScene()   ;
+	
 	//////------------------------Chargement des fichiers et des bibliothèques--------------------------//////
 
 	initSDL()                 ;
 	
 	chargementFichirs()       ;
-	
-	cube->texture   =  chargerImage("texture.png")       ;
 
 	////------------------------------------------Dessin------------------------------------------/////
 
@@ -1492,8 +1555,8 @@ void    afficheObjetMesh(Objet*  mesh)
 
 	for(i = 0 ; i < mesh->nbrePts ; i++)
 	{
-		mesh->points[i].X  =  ((mesh->points[i].x * DISTANCE) / mesh->points[i].z) + (RES_HORIZ / 2)    ;	
-		mesh->points[i].Y  =  ((mesh->points[i].y * DISTANCE) / mesh->points[i].z) + (RES_VERT  / 2)    ;				
+		mesh->points[i].X  =  ((mesh->points[i].x * DISTANCE_FOCAL) / mesh->points[i].z) + (RES_HORIZ / 2)    ;	
+		mesh->points[i].Y  =  ((mesh->points[i].y * DISTANCE_FOCAL) / mesh->points[i].z) + (RES_VERT  / 2)    ;				
 	}
 
 
@@ -1506,32 +1569,47 @@ void    afficheObjetMesh(Objet*  mesh)
 
 	return   ;
 }
-// I need to make this function more generic so that it can handle different all object of the scene.
-void    afficheObjetTexture(Objet*  obj3D)
+
+void    displayScene()
 {
-	int    i , j , k    ;
+	int    i , j , k     ;
 
 	////--------------------------------projection---------------------------------//////
 
-	for(i = 0 ; i < obj3D->nbrePts ; i++)
+	for(int  objectCnt = 0 ; objectCnt < nbreOjectScene ; objectCnt++)
 	{
-		obj3D->points[i].X  =  ((obj3D->points[i].x * DISTANCE) / obj3D->points[i].z) + (RES_HORIZ / 2)    ;	
-		obj3D->points[i].Y  =  ((obj3D->points[i].y * DISTANCE) / obj3D->points[i].z) + (RES_VERT  / 2)    ;
+		for(int  i = 0 ; i < allObjet[objectCnt]->nbrePts ; i++)
+		{
+			// The classic perspective formula: (3D_Coord(x or y) * Focal_Length / Depth(z)) + Screen_Offset
+			if(allObjet[objectCnt]->points[i].z != 0)
+			{
+				allObjet[objectCnt]->points[i].X  =  ((allObjet[objectCnt]->points[i].x * DISTANCE_FOCAL) / allObjet[objectCnt]->points[i].z) + (RES_HORIZ / 2)    ;	
+				allObjet[objectCnt]->points[i].Y  =  ((allObjet[objectCnt]->points[i].y * DISTANCE_FOCAL) / allObjet[objectCnt]->points[i].z) + (RES_VERT  / 2)    ;
+				//printf("Object = %d | X = %d; Y = %d | x = %d, y = %d, z = %d, \n", objectCnt, allObjet[objectCnt]->points[i].X , allObjet[objectCnt]->points[i].Y , allObjet[objectCnt]->points[i].x , allObjet[objectCnt]->points[i].y , allObjet[objectCnt]->points[i].z);
+			}
+		}
 	}
-
-	////--------------------------dessin des faces---------------------------------//////
-
+	
+	////-------------------------- 2. DEPTH SORTING ---------------------------------//////
+	// Sorts all faces from back-to-front so that near objects are drawn over far objects.
+	
 	painterAlgorithmSort()  ;
 	
-	for(i = 0 ; i < nbreFaceScene ; i++)
+	////--------------------------dessin des faces---------------------------------//////
+
+	// Main loop to process every face in the global scene list.
+	for(int  i = 0 ; i < nbreFaceScene ; i++)
 	{		
-		if((((faces[i]->normale.x * (faces[i]->vertices[0]->X - (RES_HORIZ / 2))) + (faces[i]->normale.y * (faces[i]->vertices[0]->Y - (RES_VERT  / 2))) + (faces[i]->normale.z * DISTANCE)) < 0) && ((faces[i]->vertices[0]->X > 0) || (faces[i]->vertices[1]->X > 0) || (faces[i]->vertices[2]->X > 0)) && ((faces[i]->vertices[0]->X < (RES_HORIZ-1)) || (faces[i]->vertices[1]->X < (RES_HORIZ-1)) || (faces[i]->vertices[2]->X < (RES_HORIZ-1))) && ((faces[i]->vertices[0]->Y > 0) || (faces[i]->vertices[1]->Y > 0) || (faces[i]->vertices[2]->Y > 0)) && ((faces[i]->vertices[0]->Y < (RES_VERT-1)) || (faces[i]->vertices[1]->Y < (RES_VERT-1)) || (faces[i]->vertices[2]->Y < (RES_VERT-1))))
+		if((((faces[i]->normale.x * (faces[i]->vertices[0]->X - (RES_HORIZ / 2))) + (faces[i]->normale.y * (faces[i]->vertices[0]->Y - (RES_VERT  / 2))) + (faces[i]->normale.z * DISTANCE_FOCAL)) < 0) // Back-Face Culling : using the dot-product Ux * Vx + Uy * Vy + Uz * Vz, if it is positif they are pointing to the same direction.
+		&& ((faces[i]->vertices[0]->X > 0) || (faces[i]->vertices[1]->X > 0) || (faces[i]->vertices[2]->X > 0)) && ((faces[i]->vertices[0]->X < (RES_HORIZ-1)) || (faces[i]->vertices[1]->X < (RES_HORIZ-1)) || (faces[i]->vertices[2]->X < (RES_HORIZ-1))) 
+		&& ((faces[i]->vertices[0]->Y > 0) || (faces[i]->vertices[1]->Y > 0) || (faces[i]->vertices[2]->Y > 0)) && ((faces[i]->vertices[0]->Y < (RES_VERT-1)) || (faces[i]->vertices[1]->Y < (RES_VERT-1)) || (faces[i]->vertices[2]->Y < (RES_VERT-1)))  // Checks if the triangle is at least partially within the screen boundaries.
+		&& ((faces[i]->vertices[0]->z > DISTANCE_FOCAL)) && ((faces[i]->vertices[1]->z > DISTANCE_FOCAL)) && ((faces[i]->vertices[2]->z > DISTANCE_FOCAL)))
 		{	
 			int    haut   =   0      ;
 			int    bas , millieu     ;
 			int    baleillage , dis  ;
 			
-			
+			// Identifies which vertex is the Top (haut), Middle (millieu), and Bottom (bas) of the triangle.
 			if(faces[i]->vertices[0]->Y > faces[i]->vertices[1]->Y)
 			{
 				haut   =   1   ;
@@ -3015,8 +3093,8 @@ void    afficheObjetTexture(Objet*  obj3D)
 					if(baleillage == 1)
 					{
 						for(j = x3 ; j <= x4 ; j++)
-						{//	printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
-							setPixel(j , y ,getPixel(xH , yH , faces[i]->texture))      ;
+						{//printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
+							setPixel(j , y ,getPixel(xH , yH<0?0:yH , faces[i]->texture))      ;
 							
 							erreurHx   -=  resteHx       ;
 							erreurHy   -=  resteHy       ;
@@ -3046,7 +3124,7 @@ void    afficheObjetTexture(Objet*  obj3D)
 					{
 						for(j = x3 ; j >= x4 ; j--)
 						{//printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
-							setPixel(j , y ,getPixel(xH , yH , faces[i]->texture))      ;
+							setPixel(j , y ,getPixel(xH , yH<0?0:yH , faces[i]->texture))      ;
 							
 							erreurHx   -=  resteHx       ;
 							erreurHy   -=  resteHy       ;
@@ -3385,7 +3463,7 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
 	objet->nbreSegment   =   0   ;
 
 	objet->centre.x   =     0      ;
-	objet->centre.y   =   200      ;
+	objet->centre.y   =     0      ;
 	objet->centre.z   =  1000      ;
 
 	objet->angleX   =      PI      ;
@@ -3431,7 +3509,7 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
 					sscanf(l, "map_Kd %s", textureFile)   ;
 					snprintf(texturePath, sizeof(texturePath), "%s%s", dirPath, textureFile)    ;
 					
-					objet->texture   =   chargerImage(texturePath)   ;
+					objet->texture   =   chargerImage(texturePath)   ;					
 				}
 			}
 		}
@@ -3507,11 +3585,7 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
 				objet->faces[objet->nbreFace].uv[2][0]    =   UV[v3[1] - 1][0]   ;
 				objet->faces[objet->nbreFace].uv[2][1]    =   UV[v3[1] - 1][1]   ;
 
-				objet->faces[objet->nbreFace].texture   =   objet->texture   ;
-
-				// filling the global scene with faces
-				faces[nbreFaceScene]    =    &objet->faces[objet->nbreFace]    ;
-				nbreFaceScene++    ;
+				objet->faces[objet->nbreFace].texture     =   objet->texture     ;
 
 				objet->nbreFace++    ;
 			}
