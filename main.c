@@ -157,7 +157,7 @@ void    afficheObjetMesh(Objet*  mesh)    ;
 static  inline  void    translation(Objet * objet , int Dx , int Dy , int Dz)        ;
 static  inline  void    changementEchell_rotation(Objet * objet)                     ;
 static  inline  void    swap(int * a , int * b)                                      ;
-static  inline  void    Mix_PlayChannel_Bridge(int ch, MIX_Audio* audio, int loops) ;
+static  inline  void    Mix_PlayChannel_Bridge(int ch, MIX_Audio* audio, int loops)  ;
 void    ligne(int x0, int y0, int x1, int y1, Uint32  couleur)    ;
 void    animationRadar(int X , int Y , float R)                   ;
 void    animationTexte(void)                                      ;
@@ -1494,25 +1494,29 @@ void    initialisation(void)
 {
 	///-----------------------------3D objects initialization and scene loading--------------------------------//////
 	
-	Objet*    raziel   =  malloc(sizeof(Objet))  ;
+	//Objet*    raziel   =  malloc(sizeof(Objet))  ;
+	//Objet*    room01    =  malloc(sizeof(Objet))  ;
+	Objet*    dino    =  malloc(sizeof(Objet))   ;
 	Objet*    cube     =  malloc(sizeof(Objet))  ;
-	Objet*    terrain  =  malloc(sizeof(Objet))  ;
+	//Objet*    terrain  =  malloc(sizeof(Objet))  ;
 
 
-	controlledPlayer =  raziel   ;
+	controlledPlayer =  dino   ;
 	
-	loadOBJfile("Raziel/Raziel.obj", raziel)   ;
-	loadOBJfile("assets/terrain.obj", terrain)       ;
+	//loadOBJfile("Raziel/Raziel.obj", raziel)   ;
+	//loadOBJfile("assets/room01.obj", room01)       ;
+	loadOBJfile("assets/dino/dino.obj", dino)       ;
+	//loadOBJfile("assets/terrain.obj", terrain)       ;
 	loadCube(cube)                             ;
 
-	allObjet[0]   =   raziel   ;
+	allObjet[0]   =   dino  ;
 	allObjet[1]   =   cube     ;
-	allObjet[2]   =   terrain  ;
+	//allObjet[2]   =   terrain  ;
 
-	terrain->centre.z   =  3000      ;
-	terrain->angleX     =    PI      ;
+	//terrain->centre.z   =  3000      ;
+	//terrain->angleX     =    PI      ;
 
-	nbreOjectScene   =   3     ;	
+	nbreOjectScene   =   1     ;	
 	
 	loadScene()   ;
 	
@@ -1603,8 +1607,10 @@ void    displayScene()
 		if((((faces[i]->normale.x * (faces[i]->vertices[0]->X - (RES_HORIZ / 2))) + (faces[i]->normale.y * (faces[i]->vertices[0]->Y - (RES_VERT  / 2))) + (faces[i]->normale.z * DISTANCE_FOCAL)) < 0) // Back-Face Culling : using the dot-product Ux * Vx + Uy * Vy + Uz * Vz, if it is positif they are pointing to the same direction.
 		&& ((faces[i]->vertices[0]->X > 0) || (faces[i]->vertices[1]->X > 0) || (faces[i]->vertices[2]->X > 0)) && ((faces[i]->vertices[0]->X < (RES_HORIZ-1)) || (faces[i]->vertices[1]->X < (RES_HORIZ-1)) || (faces[i]->vertices[2]->X < (RES_HORIZ-1))) 
 		&& ((faces[i]->vertices[0]->Y > 0) || (faces[i]->vertices[1]->Y > 0) || (faces[i]->vertices[2]->Y > 0)) && ((faces[i]->vertices[0]->Y < (RES_VERT-1)) || (faces[i]->vertices[1]->Y < (RES_VERT-1)) || (faces[i]->vertices[2]->Y < (RES_VERT-1)))  // Checks if the triangle is at least partially within the screen boundaries.
-		&& ((faces[i]->vertices[0]->z > DISTANCE_FOCAL)) && ((faces[i]->vertices[1]->z > DISTANCE_FOCAL)) && ((faces[i]->vertices[2]->z > DISTANCE_FOCAL)))
+		&& ((faces[i]->vertices[0]->z > DISTANCE_FOCAL)) && ((faces[i]->vertices[1]->z > DISTANCE_FOCAL)) && ((faces[i]->vertices[2]->z > DISTANCE_FOCAL))) // Checks if the triangle is too close or behind the camera
 		{	
+			
+			
 			int    haut   =   0      ;
 			int    bas , millieu     ;
 			int    baleillage , dis  ;
@@ -1736,7 +1742,7 @@ void    displayScene()
 			}
 			else
 			{
-				DistVx   =  distVx - 1   ;
+				DistVx   =  distVx - 1   ;				
 			}
 			
 			int    resteVy    =     abs(DVy) % DV  ;
@@ -3423,6 +3429,14 @@ Point   calculateFaceNormal(Point* nrm, Point* v1, Point* v2, Point* v3)
 	nrm->x   =   (u.y * v.z) - (u.z * v.y)     ;
 	nrm->y   =   (u.z * v.x) - (u.x * v.z)     ;
 	nrm->z   =   (u.x * v.y) - (u.y * v.x)     ;
+
+	// Prevent overflow
+	while(abs(nrm->x) > 10000 || abs(nrm->y) > 10000 || abs(nrm->z) > 10000)
+	{
+		nrm->x   /=   2   ;
+		nrm->y   /=   2   ;
+		nrm->z   /=   2   ;
+	}
 	
 	// Normalize the vector
 	float length   =   sqrt(nrm->x * nrm->x + nrm->y * nrm->y + nrm->z * nrm->z)     ;
@@ -3464,9 +3478,9 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
 
 	objet->centre.x   =     0      ;
 	objet->centre.y   =     0      ;
-	objet->centre.z   =  1000      ;
+	objet->centre.z   =  1500      ;
 
-	objet->angleX   =      PI      ;
+	objet->angleX   =     0.0      ;
 	objet->angleY   =     0.0      ;
 	objet->angleZ   =     0.0      ;
 	objet->echell   =     1.0      ;
