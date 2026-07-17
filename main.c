@@ -41,9 +41,9 @@ typedef     MIX_Audio Mix_Music  ;
 #define   PI 3.14159265358979323846
 
 #define   NBRE_POINT_MAX       5000
-#define   NBRE_SEG_MAX         6000
+#define   NBRE_SEG_MAX       100000
 #define   NBRE_OBJET_MAX        100
-#define   NBRE_FACE_MAX        2000
+#define   NBRE_FACE_MAX        3000
 #define   NBRE_FACE_MAX_SCENE  3000
 
 #define   DISTANCE_FOCAL     512
@@ -200,7 +200,7 @@ int   main(int  argc , char**  argv)
 	int         Dz   =   0      ;
 
 	initialisation()            ;
-	
+		
 	///////--------------------------------------test------------------------------------////////
 
 
@@ -232,10 +232,10 @@ int   main(int  argc , char**  argv)
 		
 		dessinEnv2D()   ;
 
-		changementEchell_rotation(allObjet[1])      ;
-		allObjet[1]->angleX  +=  0.05               ;
-		allObjet[1]->angleY  +=  0.05               ;
-		allObjet[1]->angleZ  +=  0.05               ;
+		// changementEchell_rotation(allObjet[1])      ;
+		// allObjet[1]->angleX  +=  0.05               ;
+		// allObjet[1]->angleY  +=  0.05               ;
+		// allObjet[1]->angleZ  +=  0.05               ;
 		
 		changementEchell_rotation(controlledPlayer)     ;
 		translation(controlledPlayer, Dx, Dy, Dz)	    ;
@@ -244,6 +244,7 @@ int   main(int  argc , char**  argv)
 		Dy   =   0      ;
 		Dz   =   0      ;
 		
+		//ligne(-20 , 367 , -20 , 367 , SDL_MapRGB(affichage->format, 5 , 200 , 128))  ;
 		//afficheObjetMesh(controlledPlayer)    ;
 		displayScene()  ;
 		
@@ -739,7 +740,6 @@ int   main(int  argc , char**  argv)
 		{
     		SDL_Delay((1000 / FRAMES_PER_SECOND) - (Uint32)elapsed);
 		}
-
 		//printf("FPS = %i\n", (FPS += 1000 / elapsed)/i++)   ;
 	}
 	
@@ -847,18 +847,25 @@ static inline void setPixel(int X, int Y, Uint32 couleur)
 
 static inline   Uint32    getPixel(int  X , int  Y , SDL_Surface*  image)
 {
-	 return    *((Uint32*)(image->pixels) + (image->w * Y) + X)    ;
+	if (Y < 0 || Y >= image->h || X < 0 || X >= image->w) return    0xFFFFFFFF   ;
+	return    *((Uint32*)(image->pixels) + (image->w * Y) + X)    ;
 }
 
 void   ligne(int x0, int y0, int x1, int y1 , Uint32  couleur)
 {
+	if(x0 == x1 && y0 == y1)
+	{
+		setPixel(x0, y0, couleur)   ;
+		return   ;
+	}
+	
 	int  ponte  =  (abs(y1 - y0) > abs(x1 - x0))   ; 
 	if (ponte)
 	{
 		swap(&x0, &y0)   ;
 		swap(&x1, &y1)   ;
 	}
-
+	
 	if (x0 > x1)
 	{
 		swap(&x0, &x1)   ;
@@ -962,7 +969,7 @@ void   ligne(int x0, int y0, int x1, int y1 , Uint32  couleur)
 		}
 	}
 	
-
+	
 	if(y1 < 0)
 	{
 		int   erreur_tmp   =   erreur    ;
@@ -988,7 +995,7 @@ void   ligne(int x0, int y0, int x1, int y1 , Uint32  couleur)
 	for(x = x0 ; x <= x1 ; x++)
 	{
 		if(ponte)
-		{
+		{			
 			setPixel(y,x,couleur)   ;
 		}
 		else
@@ -1003,9 +1010,7 @@ void   ligne(int x0, int y0, int x1, int y1 , Uint32  couleur)
 			y       = y + pas_y        ;
 			erreur  = erreur + Dx      ;
 		}
-
 	}
-
 	return    ;
 }
 
@@ -1482,6 +1487,7 @@ void  loadScene()
 			faces[nbreFaceScene]    =    &allObjet[i]->faces[j]    ;
 			//printf("x=%d, y=%d, z=%d\n", faces[nbreFaceScene]->vertices[0]->x, faces[nbreFaceScene]->vertices[0]->y, faces[nbreFaceScene]->vertices[0]->z)  ;
 			nbreFaceScene++    ;
+		
 		}
 	}
 
@@ -1510,11 +1516,12 @@ void    initialisation(void)
 	loadCube(cube)                             ;
 
 	allObjet[0]   =   dino  ;
-	allObjet[1]   =   cube     ;
+	//allObjet[1]   =   cube     ;
 	//allObjet[2]   =   terrain  ;
 
-	//terrain->centre.z   =  3000      ;
-	//terrain->angleX     =    PI      ;
+	dino->centre.z   =  50000      ;
+	dino->centre.y   =  20000     ;
+	dino->angleX     =    PI       ;
 
 	nbreOjectScene   =   1     ;	
 	
@@ -1559,8 +1566,15 @@ void    afficheObjetMesh(Objet*  mesh)
 
 	for(i = 0 ; i < mesh->nbrePts ; i++)
 	{
-		mesh->points[i].X  =  ((mesh->points[i].x * DISTANCE_FOCAL) / mesh->points[i].z) + (RES_HORIZ / 2)    ;	
-		mesh->points[i].Y  =  ((mesh->points[i].y * DISTANCE_FOCAL) / mesh->points[i].z) + (RES_VERT  / 2)    ;				
+		if(mesh->points[i].z != 0)
+		{	
+			mesh->points[i].X  =  ((mesh->points[i].x * DISTANCE_FOCAL) / mesh->points[i].z) + (RES_HORIZ / 2)    ;	
+			mesh->points[i].Y  =  ((mesh->points[i].y * DISTANCE_FOCAL) / mesh->points[i].z) + (RES_VERT  / 2)    ;				
+			// if(mesh->points[i].X  < 0 || mesh->points[i].X  >= RES_HORIZ || mesh->points[i].Y  < 0 || mesh->points[i].Y  >= RES_VERT)
+			// {
+			// 	printf("vertex :  %d, (X=%d, Y = %d)\n", i, mesh->points[i].X, mesh->points[i].Y)  ;
+			// }
+		}
 	}
 
 
@@ -1568,7 +1582,8 @@ void    afficheObjetMesh(Objet*  mesh)
 
 	for(i = 0 ; i < mesh->nbreSegment ; i++)
 	{		
-		ligne(mesh->segments[i][0]->X , mesh->segments[i][0]->Y , mesh->segments[i][1]->X , mesh->segments[i][1]->Y , SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;	
+		//printf("Segment = %i, (X1=%d, Y1=%d)-----(X2=%d, Y2=%d)\n", i,mesh->segments[i][0]->X, mesh->segments[i][0]->Y, mesh->segments[i][1]->X, mesh->segments[i][1]->Y)   ;
+		ligne(mesh->segments[i][0]->X , mesh->segments[i][0]->Y , mesh->segments[i][1]->X , mesh->segments[i][1]->Y , SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;
 	}
 
 	return   ;
@@ -1609,8 +1624,8 @@ void    displayScene()
 		&& ((faces[i]->vertices[0]->Y > 0) || (faces[i]->vertices[1]->Y > 0) || (faces[i]->vertices[2]->Y > 0)) && ((faces[i]->vertices[0]->Y < (RES_VERT-1)) || (faces[i]->vertices[1]->Y < (RES_VERT-1)) || (faces[i]->vertices[2]->Y < (RES_VERT-1)))  // Checks if the triangle is at least partially within the screen boundaries.
 		&& ((faces[i]->vertices[0]->z > DISTANCE_FOCAL)) && ((faces[i]->vertices[1]->z > DISTANCE_FOCAL)) && ((faces[i]->vertices[2]->z > DISTANCE_FOCAL))) // Checks if the triangle is too close or behind the camera
 		{	
-			
-			
+			//printf("face[%i] = (%d,%d,%d)(%d,%d)-(%d,%d,%d)(%d,%d)-(%d,%d,%d)(%d,%d)\n", i, faces[i]->vertices[0]->x, faces[i]->vertices[0]->y, faces[i]->vertices[0]->z, faces[i]->vertices[0]->X , faces[i]->vertices[0]->Y , faces[i]->vertices[1]->x, faces[i]->vertices[1]->y, faces[i]->vertices[1]->z, faces[i]->vertices[1]->X , faces[i]->vertices[1]->Y , faces[i]->vertices[2]->x, faces[i]->vertices[2]->y, faces[i]->vertices[2]->z, faces[i]->vertices[2]->X , faces[i]->vertices[2]->Y )   ;
+
 			int    haut   =   0      ;
 			int    bas , millieu     ;
 			int    baleillage , dis  ;
@@ -1700,7 +1715,6 @@ void    displayScene()
 					pas_L_1   =  pas_C_1 - 1   ;
 				}
 			}
-			
 			int    reste2    =     abs(Dx2) % Dy2 ;
 			int    erreur2   =     Dy2 / 2        ;
 			int    pas_C_2   =     Dx2 / Dy2      ;
@@ -2009,7 +2023,7 @@ void    displayScene()
 					}
 				}
 				else
-				{
+				{   
 					if(X2 < 0)
 					{
 						if(Y0 == Y1)
@@ -2420,8 +2434,7 @@ void    displayScene()
 						}
 					}
 				}
-			}
-			
+			}			
 			
 			if(X0 >= RES_HORIZ)
 			{
@@ -3099,8 +3112,8 @@ void    displayScene()
 					if(baleillage == 1)
 					{
 						for(j = x3 ; j <= x4 ; j++)
-						{//printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
-							setPixel(j , y ,getPixel(xH , yH<0?0:yH , faces[i]->texture))      ;
+						{//if (debug)  printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
+							setPixel(j , y ,getPixel(xH , yH , faces[i]->texture))      ;
 							
 							erreurHx   -=  resteHx       ;
 							erreurHy   -=  resteHy       ;
@@ -3129,8 +3142,8 @@ void    displayScene()
 					else
 					{
 						for(j = x3 ; j >= x4 ; j--)
-						{//printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
-							setPixel(j , y ,getPixel(xH , yH<0?0:yH , faces[i]->texture))      ;
+						{//if (debug)  printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
+							setPixel(j , y ,getPixel(xH , yH , faces[i]->texture))      ;
 							
 							erreurHx   -=  resteHx       ;
 							erreurHy   -=  resteHy       ;
@@ -3213,6 +3226,7 @@ void    displayScene()
 			//ligne( X1 , Y1 , X2 , Y2 , SDL_MapRGB(affichage->format, 5 , 2 , 128))    ;
 			//ligne( X0 , Y0 , X2 , Y2 , SDL_MapRGB(affichage->format, 5 , 2 , 128))    ;
 		}
+		
 	}
 	
 	return   ;
@@ -3476,14 +3490,14 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
     objet->nbreFace      =   0   ;
 	objet->nbreSegment   =   0   ;
 
-	objet->centre.x   =     0      ;
-	objet->centre.y   =     0      ;
-	objet->centre.z   =  1500      ;
+	objet->centre.x   =     0    ;
+	objet->centre.y   =     0    ;
+	objet->centre.z   =  5000    ;
 
-	objet->angleX   =     0.0      ;
-	objet->angleY   =     0.0      ;
-	objet->angleZ   =     0.0      ;
-	objet->echell   =     1.0      ;
+	objet->angleX   =     0.0    ;
+	objet->angleY   =     0.0    ;
+	objet->angleZ   =     0.0    ;
+	objet->echell   =     1.0    ;
 
     char   line[256]              ;
 
@@ -3522,8 +3536,8 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
 
 					sscanf(l, "map_Kd %s", textureFile)   ;
 					snprintf(texturePath, sizeof(texturePath), "%s%s", dirPath, textureFile)    ;
-					
-					objet->texture   =   chargerImage(texturePath)   ;					
+					//printf("texturePath = %s\n", texturePath)   ;
+					objet->texture   =   chargerImage(texturePath)   ;	
 				}
 			}
 		}
@@ -3556,7 +3570,7 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
 			// Store texture coordinates
 			UV[uvCount][0]    =   (int)(u * objet->texture->w)            ;
 			UV[uvCount][1]    =   (int)((1.0f - v) * objet->texture->h)   ;
-
+			//printf("UV %d: (%d, %d)\n", uvCount, UV[uvCount][0], UV[uvCount][1])   ;
 			uvCount++    ;
 		}
 
@@ -3590,6 +3604,7 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
 				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[2]     ;
 				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[0]     ;
 				objet->nbreSegment++    ;
+				//printf("Segment %d\n", objet->nbreSegment);
 				
 				// Store the texture coordinate
 				objet->faces[objet->nbreFace].uv[0][0]    =   UV[v1[1] - 1][0]   ;
@@ -3600,7 +3615,7 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
 				objet->faces[objet->nbreFace].uv[2][1]    =   UV[v3[1] - 1][1]   ;
 
 				objet->faces[objet->nbreFace].texture     =   objet->texture     ;
-
+				//printf("Face %d (x=%d, y=%d, z=%d).\n", objet->nbreFace, v1[0], v2[0], v3[0])   ;
 				objet->nbreFace++    ;
 			}
 			else
