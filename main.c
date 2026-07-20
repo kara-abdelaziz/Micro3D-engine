@@ -40,11 +40,11 @@ typedef     MIX_Audio Mix_Music  ;
 
 #define   PI 3.14159265358979323846
 
-#define   NBRE_POINT_MAX       5000
-#define   NBRE_SEG_MAX       100000
+#define   NBRE_POINT_MAX       7000
+#define   NBRE_SEG_MAX         7000
 #define   NBRE_OBJET_MAX        100
-#define   NBRE_FACE_MAX        3000
-#define   NBRE_FACE_MAX_SCENE  3000
+#define   NBRE_FACE_MAX        7000
+#define   NBRE_FACE_MAX_SCENE  7000
 
 #define   DISTANCE_FOCAL     512
 #define   RES_VERT           600
@@ -166,7 +166,7 @@ static  inline  Uint32   getPixel(int  X , int  Y , SDL_Surface*  image)  ;
 static  inline  void     triTableau(int tableau[][2] , int * position , int action , int y)    ;
 static  inline  void     delTableau(int tableau[][2] , int * taille , int action)              ;
 SDL_Surface*     chargerImage(const  char*  file)          ;
-bool      loadOBJfile(const  char*  path, Objet*  objet)   ;
+bool loadOBJfile(const  char*  path, Objet*  objet, int posX, int posY, int posZ, float angleX, float angleY, float angleZ, float echell)   ;
 Point     calculateFaceNormal(Point* nrm, Point* v1, Point* v2, Point* v3)     ;
 void      chargementFichirs()        ;
 bool      Mix_OpenAudio()            ;
@@ -1501,29 +1501,31 @@ void    initialisation(void)
 	///-----------------------------3D objects initialization and scene loading--------------------------------//////
 	
 	//Objet*    raziel   =  malloc(sizeof(Objet))  ;
-	//Objet*    room01    =  malloc(sizeof(Objet))  ;
-	Objet*    dino    =  malloc(sizeof(Objet))   ;
+	//Objet*    dino    =  malloc(sizeof(Objet))   ;
+	//Objet*    kratos    =  malloc(sizeof(Objet))   ;
 	Objet*    cube     =  malloc(sizeof(Objet))  ;
 	//Objet*    terrain  =  malloc(sizeof(Objet))  ;
+	Objet*    room00    =  malloc(sizeof(Objet))  ;
+	Objet*    room01    =  malloc(sizeof(Objet))  ;
 
-
-	controlledPlayer =  dino   ;
+	controlledPlayer =  room00   ;
 	
-	//loadOBJfile("Raziel/Raziel.obj", raziel)   ;
-	//loadOBJfile("assets/room01.obj", room01)       ;
-	loadOBJfile("assets/dino/dino.obj", dino)       ;
-	//loadOBJfile("assets/terrain.obj", terrain)       ;
+	//loadOBJfile("Raziel/Raziel.obj", raziel, 0, 400, 1000, PI, 0.0, 0.0, 1.0)   ;	
+	//loadOBJfile("assets/dino/dino.obj", dino, 0, 20000, 50000,  PI, 0.0, 0.0, 1.0)      ;
+	//loadOBJfile("assets/kratos/kratos.obj", kratos, 0, 20000, 50000, PI, 0.0, 0.0, 1.0)      ;
+	//loadOBJfile("assets/terrain.obj", terrain, 0, 0, 5000, 0.0, 0.0, 0.0, 1.0)  ;
 	loadCube(cube)                             ;
+	loadOBJfile("assets/TR1-level1/room00.obj", room00, -340000, 10000, 560000, 0.0, 0.0, 0.0, 1.0)      ;
+	loadOBJfile("assets/TR1-level1/room01.obj", room01, -340000, 10000, 560000, 0.0, 0.0, 0.0, 1.0)      ;
 
-	allObjet[0]   =   dino  ;
+	allObjet[1]   =   room00  ;
+	allObjet[0]   =   room01  ;
+	
 	//allObjet[1]   =   cube     ;
 	//allObjet[2]   =   terrain  ;
+	//allObjet[0]   =   raziel  ;
 
-	dino->centre.z   =  50000      ;
-	dino->centre.y   =  20000     ;
-	dino->angleX     =    PI       ;
-
-	nbreOjectScene   =   1     ;	
+	nbreOjectScene   =   2     ;	 
 	
 	loadScene()   ;
 	
@@ -3462,7 +3464,7 @@ Point   calculateFaceNormal(Point* nrm, Point* v1, Point* v2, Point* v3)
 	return *nrm  ;
 }
 
-bool loadOBJfile(const  char*  path, Objet*  objet) 
+bool loadOBJfile(const  char*  path, Objet*  objet, int posX, int posY, int posZ, float angleX, float angleY, float angleZ, float echell)
 {
     // extract directory from path to handle relative texture paths
 	FILE*  file    =    fopen(path, "r")    ;	
@@ -3490,14 +3492,14 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
     objet->nbreFace      =   0   ;
 	objet->nbreSegment   =   0   ;
 
-	objet->centre.x   =     0    ;
-	objet->centre.y   =     0    ;
-	objet->centre.z   =  5000    ;
+	objet->centre.x   =  posX    ;
+	objet->centre.y   =  posY    ;
+	objet->centre.z   =  posZ    ;
 
-	objet->angleX   =     0.0    ;
-	objet->angleY   =     0.0    ;
-	objet->angleZ   =     0.0    ;
-	objet->echell   =     1.0    ;
+	objet->angleX   =   angleX   ;
+	objet->angleY   =   angleY   ;
+	objet->angleZ   =   angleZ   ;
+	objet->echell   =   echell   ;
 
     char   line[256]              ;
 
@@ -3593,17 +3595,17 @@ bool loadOBJfile(const  char*  path, Objet*  objet)
 
 				// Store the segments for the face		
 				
-				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[0]     ;
-				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[1]     ;
-				objet->nbreSegment++    ;
+				// objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[0]     ;
+				// objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[1]     ;
+				// objet->nbreSegment++    ;
 
-				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[1]     ;
-				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[2]     ;
-				objet->nbreSegment++    ;
+				// objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[1]     ;
+				// objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[2]     ;
+				// objet->nbreSegment++    ;
 
-				objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[2]     ;
-				objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[0]     ;
-				objet->nbreSegment++    ;
+				// objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[2]     ;
+				// objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[0]     ;
+				// objet->nbreSegment++    ;
 				//printf("Segment %d\n", objet->nbreSegment);
 				
 				// Store the texture coordinate
