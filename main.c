@@ -42,9 +42,9 @@ typedef     MIX_Audio Mix_Music  ;
 
 #define   NBRE_POINT_MAX       7000
 #define   NBRE_SEG_MAX         7000
-#define   NBRE_OBJET_MAX        100
+#define   NBRE_OBJET_MAX        200
 #define   NBRE_FACE_MAX        7000
-#define   NBRE_FACE_MAX_SCENE  7000
+#define   NBRE_FACE_MAX_SCENE 20000
 
 #define   DISTANCE_FOCAL     512
 #define   RES_VERT           600
@@ -52,14 +52,7 @@ typedef     MIX_Audio Mix_Music  ;
 #define   RES_VERT_DIV_2     300
 #define   RES_HORIZ_DIV_2    400
 
-#define   HOR_FIELD_OF_VIEW          1.326406f     // the formula is 2*atanf(RES_HORIZ_DIV_2 / (float)DISTANCE_FOCAL)
-#define   VER_FIELD_OF_VIEW          1.06003f      // the formula is 2*atanf(RES_VERT_DIV_2 / (float)DISTANCE_FOCAL) 
-#define   HOR_FIELD_OF_VIEW_DIV_2    0.663203f  
-#define   VER_FIELD_OF_VIEW_DIV_2    0.530015f 
-#define   HOR_FIELD_OF_VIEW_RATE     0.78125f      // the formula is RES_HORIZ_DIV_2 / (float)DISTANCE_FOCAL)
-#define   VER_FIELD_OF_VIEW_RATE     0.5859375f    // the formula is RES_VERT_DIV_2 / (float)DISTANCE_FOCAL)
-
-#define   HORIZON_END           250000
+#define   HORIZON_END           300000
 #define   FRAMES_PER_SECOND         60
 
 ////-------------------------variables globales-------------------------------------/////
@@ -158,8 +151,9 @@ typedef  struct  objet
 
 	float   scale      ;              // scale of the 3D object
 
-	Point   sphereCenter    ;         // a sphere that warp the object used for object culling
-	int     radius          ;         // this is the original radius of the object, it should be scaled by the scale value.
+	Point   orgSphrCent    ;         // a sphere that warp the object used for object culling (original sphere center)
+	Point   wrdSphrCent    ;         // a sphere that warp the object used for object culling after transformation (world sphere center)
+	int     radius         ;         // this is the original radius of the object, it should be scaled by the scale value.
 
 	bool    isVisible       ;         // is the object visible or not depending on the frustum culling
 }  Objet  ;
@@ -244,9 +238,9 @@ static  inline  void     setPixel(int  X , int  Y , Uint32  couleur)      ;
 static  inline  Uint32   getPixel(int  X , int  Y , SDL_Surface*  image)  ;
 static  inline  void     triTableau(int tableau[][2] , int * position , int action , int y)    ;
 static  inline  void     delTableau(int tableau[][2] , int * taille , int action)              ;
-SDL_Surface*     chargerImage(const  char*  file)          ;
-bool      loadOBJfile(const  char*  path, Objet*  objet, int posX, int posY, int posZ, float angleX, float angleY, float angleZ, float scale)   ;
 Point     calculateFaceNormal(Point* nrm, Point* v1, Point* v2, Point* v3)     ;
+SDL_Surface*     chargerImage(const  char*  file)          ;
+bool      loadOBJfile(const  char*  path, Objet*  objet)   ;
 void      chargementFichirs()        ;
 bool      Mix_OpenAudio()            ;
 void      painterAlgorithmSort()     ;
@@ -261,6 +255,8 @@ int          nbreOjectScene     =   0      ;
 
 Objet*       controlledPlayer   =   NULL   ;
 
+int          dbg1X, dbg1Y, dbg2X, dbg2Y    ;   // for debugging purpose, used line function as global parameters to display a line whatever anywhere from the program
+
 ////--------------------------------Fonction principale-------------------------------------/////
 
 int   main(int  argc , char**  argv)
@@ -272,6 +268,15 @@ int   main(int  argc , char**  argv)
 	int         FPS  =   0      ;
 	int         i    =   1      ;
 	int         temps           ;
+
+	int     Dx      =   10      ;
+	int     Dy      =   10      ;
+	int     Dz      =   10      ;
+	
+	float   angleX  =   0.0f   ;
+	float   angleY  =   0.0f   ;
+	float   angleZ  =   0.0f   ;
+	float   scale   =  10.0f   ;
 
 	///////-----------------------------Initialisation-----------------------------////////
 	
@@ -305,12 +310,26 @@ int   main(int  argc , char**  argv)
 		// 	localRotationScale(allObjet[i], angleX, angleY, angleZ, scale)     ;
 		// 	translation(allObjet[i], Dx, Dy, Dz)	                                    ;
 		// }
+
+		angleX  +=   0.1f   ;
+		angleY  +=   0.1f   ;
+
+		// raziel animation	
+		localRotationScale(allObjet[42], PI, angleY, 0.0, 20.0)  ;
+	
+		// cube animation
+		if(allObjet[41]->center.z >= -280000)      Dz  =   -1000    ;
+		else if(allObjet[41]->center.z < -560000)  Dz  =   +1000    ;
+		
+		translation(allObjet[41], 0, 0 , Dz)   ;
+		localRotationScale(allObjet[41], angleX, 0.0, 0.0, 10.0)     ;
 			
 		///////-----------Fourth phase : Camera and Player movement --------------------///////
 		
 		//PlayerMovement(&buttons, controlledPlayer)  ;
-		cameraMovement(&buttons, 500, 0.05f)        ;
-
+		cameraMovement(&buttons, 1500, 0.1f)        ;
+		//printf("Camera position: (%d, %d, %d)\n", camera.posX, camera.posY, camera.posZ)   ;
+		
 		///////-----------Fifth phase : 3D pipeline displaying all the objects in the scene--------------////////////
 		///////-----------Pipeline : (original object -> world oject -> camera perspective) -------------////////////
 		
@@ -1625,7 +1644,7 @@ void    loadCube(Objet*  cube)
 	cube->nbrePts       =   8     ;
 	cube->center.x      =   0     ;
 	cube->center.y      =   0     ;
-	cube->center.z      =   3000  ;
+	cube->center.z      =   0     ;
 
 	for(int i = 0 ; i < cube->nbrePts ; i++)
 	{
@@ -1788,7 +1807,7 @@ void    loadCube(Objet*  cube)
 	cube->angleX     =   0.0        ;
 	cube->angleY     =   0.0        ;
 	cube->angleZ     =   0.0        ;
-	cube->scale              =   0.6        ;
+	cube->scale      =   0.6        ;
 
 	cube->texture   =  chargerImage("texture.png")       ;
 
@@ -1798,9 +1817,9 @@ void    loadCube(Objet*  cube)
 		cube->faces[i].owner    =  cube              ;
 	}
 
-	cube->sphereCenter.x   =   0   ;
-	cube->sphereCenter.y   =   0   ;	
-	cube->sphereCenter.z   =   0   ;
+	cube->orgSphrCent.x   =   0   ;
+	cube->orgSphrCent.y   =   0   ;	
+	cube->orgSphrCent.z   =   0   ;
 
 	cube->radius   =  (int)sqrt(500*500 + 500*500 + 500*500)   ;
 
@@ -1808,34 +1827,33 @@ void    loadCube(Objet*  cube)
 
 	return   ;
 }
-
+int max_faces = 0 ;
 void  addObjectToScene(Objet*  objet)
 {
-		for(int  i = 0 ; i < objet->nbreFace ; i++)
-		{
-			facesQueue[nbreFaceScene]    =    &objet->faces[i]    ;
-			//printf("x=%d, y=%d, z=%d\n", facesQueue[nbreFaceScene]->vertices[0]->x, facesQueue[nbreFaceScene]->vertices[0]->y, facesQueue[nbreFaceScene]->vertices[0]->z)  ;
-			nbreFaceScene++    ;		
-		}
-
-	//printf("The number of faces =  %d\n", nbreFaceScene) ;
+	for(int  i = 0 ; i < objet->nbreFace ; i++)
+	{
+		facesQueue[nbreFaceScene]    =    &objet->faces[i]    ;
+		//printf("x=%d, y=%d, z=%d\n", facesQueue[nbreFaceScene]->vertices[0]->x, facesQueue[nbreFaceScene]->vertices[0]->y, facesQueue[nbreFaceScene]->vertices[0]->z)  ;
+		nbreFaceScene++    ;		
+	}
+	//printf("Object removed from the scene with a number of faces = %d, the total number of faces = %d\n", objet->nbreFace, nbreFaceScene) ;
 
 	return    ;
 }
 
 void  removeObjectFromScene(Objet*  objet)
 {
-		for(int  i = 0 ; i < nbreFaceScene ; i++)
+	for(int  i = 0 ; i < nbreFaceScene ; i++)
+	{
+		if(facesQueue[i]->owner == objet)
 		{
-			if(facesQueue[i]->owner == objet)
-			{
-				facesQueue[i--]    =   facesQueue[nbreFaceScene-1]    ;
-				nbreFaceScene--    ;
-				//printf("x=%d, y=%d, z=%d\n", facesQueue[nbreFaceScene]->vertices[0]->x, facesQueue[nbreFaceScene]->vertices[0]->y, facesQueue[nbreFaceScene]->vertices[0]->z)  ;
-			}	
-		}
-	//printf("The number of faces =  %d\n", nbreFaceScene) ;
-
+			facesQueue[i--]    =   facesQueue[nbreFaceScene-1]    ;
+			nbreFaceScene--    ;
+			//printf("x=%d, y=%d, z=%d\n", facesQueue[nbreFaceScene]->vertices[0]->x, facesQueue[nbreFaceScene]->vertices[0]->y, facesQueue[nbreFaceScene]->vertices[0]->z)  ;
+		}	
+	}
+	//printf("Object removed from the scene with a number of faces = %d, the total number of faces = %d\n", objet->nbreFace, nbreFaceScene) ;
+	
 	return    ;
 }
 
@@ -1847,7 +1865,7 @@ void    initialisation(void)
 	Objet*    dino      =  malloc(sizeof(Objet))  ;
 	Objet*    kratos    =  malloc(sizeof(Objet))  ;
 	Objet*    cube      =  malloc(sizeof(Objet))  ;
-	Objet*    terrain   =  malloc(sizeof(Objet))  ;
+	Objet*    heihachi  =  malloc(sizeof(Objet))  ;
 
 	Objet*    room00    =  malloc(sizeof(Objet))  ;
 	Objet*    room01    =  malloc(sizeof(Objet))  ;
@@ -1894,51 +1912,50 @@ void    initialisation(void)
 	//controlledPlayer =  room00   ;
 	
 	loadCube(cube)              ;
-	//loadOBJfile("Raziel/Raziel.obj", raziel, 0, 400, 1000, PI, 0.0, 0.0, 1.0)            ;	
-	//loadOBJfile("assets/dino/dino.obj", dino, 0, 20000, 50000,  PI, 0.0, 0.0, 1.0)       ;
-	//loadOBJfile("assets/kratos/kratos.obj", kratos, 0, 20000, 50000, PI, 0.0, 0.0, 1.0)  ;
-	//loadOBJfile("assets/terrain.obj", terrain, 0, 0, 5000, 0.0, 0.0, 0.0, 1.0)           ;	
-	loadOBJfile("assets/TR1-level1/room00.obj", room00, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room01.obj", room01, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room02.obj", room02, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room03.obj", room03, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room04.obj", room04, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room05.obj", room05, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room06.obj", room06, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room07.obj", room07, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room08.obj", room08, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room09.obj", room09, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room10.obj", room10, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room11.obj", room11, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room12.obj", room12, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room13.obj", room13, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room14.obj", room14, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room15.obj", room15, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room16.obj", room16, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room17.obj", room17, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room18.obj", room18, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room19.obj", room19, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room20.obj", room20, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room21.obj", room21, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room22.obj", room22, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room23.obj", room23, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room24.obj", room24, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room25.obj", room25, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room26.obj", room26, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room27.obj", room27, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room28.obj", room28, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room29.obj", room29, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;	
-	loadOBJfile("assets/TR1-level1/room30.obj", room30, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room31.obj", room31, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room32.obj", room32, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room33.obj", room33, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room34.obj", room34, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room35.obj", room35, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room36.obj", room36, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room37.obj", room37, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room38.obj", room38, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room39.obj", room39, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
-	loadOBJfile("assets/TR1-level1/room40.obj", room40, 0, 0, 0, 0.0, 0.0, 0.0, 1.0)     ;
+	loadOBJfile("Raziel/Raziel.obj", raziel)     ;	
+	loadOBJfile("assets/dino/dino.obj", dino)    ;
+	loadOBJfile("assets/kratos/kratos.obj", kratos)         ;	
+	loadOBJfile("assets/TR1-level1/room00.obj", room00)     ;
+	loadOBJfile("assets/TR1-level1/room01.obj", room01)     ;
+	loadOBJfile("assets/TR1-level1/room02.obj", room02)     ;
+	loadOBJfile("assets/TR1-level1/room03.obj", room03)     ;
+	loadOBJfile("assets/TR1-level1/room04.obj", room04)     ;
+	loadOBJfile("assets/TR1-level1/room05.obj", room05)     ;
+	loadOBJfile("assets/TR1-level1/room06.obj", room06)     ;
+	loadOBJfile("assets/TR1-level1/room07.obj", room07)     ;
+	loadOBJfile("assets/TR1-level1/room08.obj", room08)     ;
+	loadOBJfile("assets/TR1-level1/room09.obj", room09)     ;
+	loadOBJfile("assets/TR1-level1/room10.obj", room10)     ;
+	loadOBJfile("assets/TR1-level1/room11.obj", room11)     ;
+	loadOBJfile("assets/TR1-level1/room12.obj", room12)     ;
+	loadOBJfile("assets/TR1-level1/room13.obj", room13)     ;
+	loadOBJfile("assets/TR1-level1/room14.obj", room14)     ;
+	loadOBJfile("assets/TR1-level1/room15.obj", room15)     ;
+	loadOBJfile("assets/TR1-level1/room16.obj", room16)     ;
+	loadOBJfile("assets/TR1-level1/room17.obj", room17)     ;
+	loadOBJfile("assets/TR1-level1/room18.obj", room18)     ;
+	loadOBJfile("assets/TR1-level1/room19.obj", room19)     ;
+	loadOBJfile("assets/TR1-level1/room20.obj", room20)     ;
+	loadOBJfile("assets/TR1-level1/room21.obj", room21)     ;
+	loadOBJfile("assets/TR1-level1/room22.obj", room22)     ;
+	loadOBJfile("assets/TR1-level1/room23.obj", room23)     ;
+	loadOBJfile("assets/TR1-level1/room24.obj", room24)     ;
+	loadOBJfile("assets/TR1-level1/room25.obj", room25)     ;
+	loadOBJfile("assets/TR1-level1/room26.obj", room26)     ;
+	loadOBJfile("assets/TR1-level1/room27.obj", room27)     ;
+	loadOBJfile("assets/TR1-level1/room28.obj", room28)     ;
+	loadOBJfile("assets/TR1-level1/room29.obj", room29)     ;	
+	loadOBJfile("assets/TR1-level1/room30.obj", room30)     ;
+	loadOBJfile("assets/TR1-level1/room31.obj", room31)     ;
+	loadOBJfile("assets/TR1-level1/room32.obj", room32)     ;
+	loadOBJfile("assets/TR1-level1/room33.obj", room33)     ;
+	loadOBJfile("assets/TR1-level1/room34.obj", room34)     ;
+	loadOBJfile("assets/TR1-level1/room35.obj", room35)     ;
+	loadOBJfile("assets/TR1-level1/room36.obj", room36)     ;
+	loadOBJfile("assets/TR1-level1/room37.obj", room37)     ;
+	loadOBJfile("assets/TR1-level1/room38.obj", room38)     ;
+	loadOBJfile("assets/TR1-level1/room39.obj", room39)     ;
+	loadOBJfile("assets/TR1-level1/room40.obj", room40)     ;
 
 	allObjet[0]   =   room00  ;
 	allObjet[1]   =   room01  ;
@@ -1982,17 +1999,23 @@ void    initialisation(void)
 	allObjet[39]  =   room39  ;
 	allObjet[40]  =   room40  ;
 
+	allObjet[41]  =     cube  ;
+	allObjet[42]  =   raziel  ;
+	allObjet[43]  =    dino   ;
+	allObjet[44]  =   kratos  ;
 
-	//allObjet[0]   =   cube     ;
-	//allObjet[0]   =   terrain  ;
-	//allObjet[0]   =   raziel  ;
-	//allObjet[0]     =   dino    ;
+	translation(cube, 340000, -10000, -280000)       ;
+	translation(raziel, 290000, -43000, -160000)     ;
+	translation(dino, 27000, 31000, 110000)          ;
+	translation(kratos, 27000, 30000, 110000)        ;
+	localRotationScale(dino, PI, 0.0, 0.0, 1.0)      ;
+	localRotationScale(raziel, PI, 0.0, 0.0, 20.0)   ;
+	localRotationScale(kratos, PI, 0.0, 0.0, 1.0)   ;
+
+
 	//allObjet[0]     =   kratos    ;
 
-	nbreOjectScene   =   41     ;	 
-	
-	//addObjectToScene(allObjet[0])   ;
-	//addObjectToScene(allObjet[1])   ;
+	nbreOjectScene   =   45     ;	
 	
 	//////------------------------Camera Initialization ------------------------------//////
 
@@ -3714,7 +3737,7 @@ void    displayScene()
 			// ligne(allObjet[0]->faces[i].vertices[0]->X , allObjet[0]->faces[i].vertices[0]->Y , allObjet[0]->faces[i].vertices[1]->X , allObjet[0]->faces[i].vertices[1]->Y , SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;
 			// ligne(allObjet[0]->faces[i].vertices[1]->X , allObjet[0]->faces[i].vertices[1]->Y , allObjet[0]->faces[i].vertices[2]->X , allObjet[0]->faces[i].vertices[2]->Y , SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;
 			// ligne(allObjet[0]->faces[i].vertices[2]->X , allObjet[0]->faces[i].vertices[2]->Y , allObjet[0]->faces[i].vertices[0]->X , allObjet[0]->faces[i].vertices[0]->Y , SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;
-			
+			ligne(dbg1X, dbg1Y, dbg2X, dbg2Y, SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;
 			// printf("normale = (%i, %i, %i)\n", allObjet[0]->faces[530].nrmVsl.x, allObjet[0]->faces[530].nrmVsl.y, allObjet[0]->faces[530].nrmVsl.z)   ;
 
 		}
@@ -3778,10 +3801,10 @@ static inline  void    translation(Objet * objet , int Dx , int Dy , int Dz)
 		objet->ptsWrd[i].y    +=  Dy     ;
 		objet->ptsWrd[i].z    +=  Dz     ;
 	}
-
-	objet->sphereCenter.x   +=   Dx     ;
-	objet->sphereCenter.y   +=   Dy     ;
-	objet->sphereCenter.z   +=   Dz     ;
+	
+	objet->wrdSphrCent.x   +=   Dx     ;
+	objet->wrdSphrCent.y   +=   Dy     ;
+	objet->wrdSphrCent.z   +=   Dz     ;
 	
 	return     ;
 }
@@ -3812,9 +3835,19 @@ static inline  void    localRotationScale(Objet * objet, float angleX, float ang
 		
 		// par raport a l'axe X
 		objet->ptsWrd[i].z   =    (objet->ptsWrd[i].y * sin(objet->angleX)) + (z * cos(objet->angleX))   ;
-		objet->ptsWrd[i].y   =    (objet->ptsWrd[i].y * cos(objet->angleX)) - (z * sin(objet->angleX))   ;
-		
+		objet->ptsWrd[i].y   =    (objet->ptsWrd[i].y * cos(objet->angleX)) - (z * sin(objet->angleX))   ;		
 	}
+	
+	// rotation of the sphere center
+	objet->wrdSphrCent.x   =    (objet->orgSphrCent.x * cos(objet->angleZ)) - (objet->orgSphrCent.y * sin(objet->angleZ))  ;
+	objet->wrdSphrCent.y   =    (objet->orgSphrCent.x * sin(objet->angleZ)) + (objet->orgSphrCent.y * cos(objet->angleZ))  ;
+	
+	objet->wrdSphrCent.z   =    (objet->orgSphrCent.z * cos(objet->angleY)) - (objet->wrdSphrCent.x * sin(objet->angleY))   ;
+	objet->wrdSphrCent.x   =    (objet->orgSphrCent.z * sin(objet->angleY)) + (objet->wrdSphrCent.x * cos(objet->angleY))   ;
+		
+	int    z   =  objet->wrdSphrCent.z   ; 	
+	objet->wrdSphrCent.z   =    (objet->wrdSphrCent.y * sin(objet->angleX)) + (z * cos(objet->angleX))   ;
+	objet->wrdSphrCent.y   =    (objet->wrdSphrCent.y * cos(objet->angleX)) - (z * sin(objet->angleX))   ;
 	
 	for(int i = 0 ; i < objet->nbreFace ; i++)
 	{
@@ -3843,7 +3876,12 @@ static inline  void    localRotationScale(Objet * objet, float angleX, float ang
 		objet->ptsWrd[i].y    =  (int)(objet->ptsWrd[i].y * objet->scale) + objet->center.y    ;
 		objet->ptsWrd[i].z    =  (int)(objet->ptsWrd[i].z * objet->scale) + objet->center.z    ;
 	}
-		
+	
+	// scale the sphere center point
+	objet->wrdSphrCent.x    =  (int)(objet->wrdSphrCent.x * objet->scale + objet->center.x)    ;
+	objet->wrdSphrCent.y    =  (int)(objet->wrdSphrCent.y * objet->scale + objet->center.y)    ;
+	objet->wrdSphrCent.z    =  (int)(objet->wrdSphrCent.z * objet->scale + objet->center.z)    ;
+	
 	return     ;
 }
 
@@ -3962,7 +4000,7 @@ Point   calculateFaceNormal(Point* nrm, Point* v1, Point* v2, Point* v3)
 	return *nrm  ;
 }
 
-bool loadOBJfile(const  char*  path, Objet*  objet, int posX, int posY, int posZ, float angleX, float angleY, float angleZ, float scale)
+bool loadOBJfile(const  char*  path, Objet* objet)
 {
     // extract directory from path to handle relative texture paths
 	FILE*  file    =    fopen(path, "r")    ;	
@@ -3991,18 +4029,18 @@ bool loadOBJfile(const  char*  path, Objet*  objet, int posX, int posY, int posZ
 
     objet->nbrePts       =   0   ;
     objet->nbreFace      =   0   ;
-	objet->nbreSegment   =   0   ;
+	objet->nbreSegment   =   0   ;	
 
-	objet->center.x   =  posX    ;
-	objet->center.y   =  posY    ;
-	objet->center.z   =  posZ    ;
+	objet->center.x   =   0   ;
+	objet->center.y   =   0   ;
+	objet->center.z   =   0   ;
 
-	objet->angleX   =   angleX   ;
-	objet->angleY   =   angleY   ;
-	objet->angleZ   =   angleZ   ;
-	objet->scale    =   scale    ;
+	objet->angleX     =   0.0f    ;
+	objet->angleY     =   0.0f    ;
+	objet->angleZ     =   0.0f    ;
 
-	objet->	isVisible   =   false   ;
+	objet->scale      =   1.0f    ;
+	objet->	isVisible =   false   ;
 
     char   line[256]              ;
 
@@ -4152,13 +4190,13 @@ bool loadOBJfile(const  char*  path, Objet*  objet, int posX, int posY, int posZ
 		}
     }
 
-	objet->sphereCenter.x   =   (maxX + minX) / 2  ;
-	objet->sphereCenter.y   =   (maxY + minY) / 2  ;
-	objet->sphereCenter.z   =   (maxZ + minZ) / 2  ;
+	objet->orgSphrCent.x   =   objet->wrdSphrCent.x   =   (maxX + minX) / 2  ;
+	objet->orgSphrCent.y   =   objet->wrdSphrCent.y   =   (maxY + minY) / 2  ;
+	objet->orgSphrCent.z   =   objet->wrdSphrCent.z   =   (maxZ + minZ) / 2  ;
 
-	objet->radius   =  (int)sqrt(((maxX - objet->sphereCenter.x) * (long long)(maxX - objet->sphereCenter.x)) + ((maxY - objet->sphereCenter.y) * (long long)(maxY - objet->sphereCenter.y)) + ((maxZ - objet->sphereCenter.z) * (long long)(maxZ - objet->sphereCenter.z)))   ;	
+	objet->radius   =  (int)sqrt(((maxX - objet->orgSphrCent.x) * (long long)(maxX - objet->orgSphrCent.x)) + ((maxY - objet->orgSphrCent.y) * (long long)(maxY - objet->orgSphrCent.y)) + ((maxZ - objet->orgSphrCent.z) * (long long)(maxZ - objet->orgSphrCent.z)))   ;
 	
-    fclose(file)   ;
+	fclose(file)   ;
 
     return   true  ;
 }
@@ -4172,17 +4210,17 @@ void    frustumCulling(Objet* objet)
 {
 	// calculate the relative sphere center of the object to the camera
 	Point   relativeSphereCenter   ; 
-	Point   relativeCenter         ;               // it is imperative to calculate the relative center of the object to the camera, because the sphere center is relative to the object center, and not to the world origin
+	//Point   relativeCenter         ;              
 	Point   origin   =   {   0,   0,   0   }   ;   // the origin of the camera after transformation of the world
 
-	relativeCenter.x   =    objet->center.x - camera.posX   ;
-	relativeCenter.y   =    objet->center.y - camera.posY   ;
-	relativeCenter.z   =    objet->center.z - camera.posZ   ;		
+	//relativeCenter.x   =    objet->center.x - camera.posX   ;
+	//relativeCenter.y   =    objet->center.y - camera.posY   ;
+	//relativeCenter.z   =    objet->center.z - camera.posZ   ;	
 
-	relativeSphereCenter.x     =   objet->sphereCenter.x + relativeCenter.x    ;
-	relativeSphereCenter.y     =   objet->sphereCenter.y + relativeCenter.y    ;
-	relativeSphereCenter.z     =   objet->sphereCenter.z + relativeCenter.z    ;
-	
+	relativeSphereCenter.x     =   objet->wrdSphrCent.x - camera.posX     ;
+	relativeSphereCenter.y     =   objet->wrdSphrCent.y - camera.posY     ;
+	relativeSphereCenter.z     =   objet->wrdSphrCent.z - camera.posZ     ;
+		
 	// calculate the relative sphere center after a rotation of the camera
 	int  x   =  relativeSphereCenter.x   ;   // x needs to be saved, because its value change in the 2nd instruction		
 	relativeSphereCenter.x   =    (x * cos(-camera.angleY)) - (relativeSphereCenter.z * sin(-camera.angleY))  ;
@@ -4198,40 +4236,61 @@ void    frustumCulling(Objet* objet)
 
 	bool   becomeVisible    =   false   ;
 
+	// This part is for debugging purpose, it is used to display the radius of the object
+	/*
+	if(objet == allObjet[43])
+	{
+		Point   radiusEdge         ; 
+		radiusEdge.x   =   relativeSphereCenter.x + (int)(objet->radius * objet->scale)   ;
+		radiusEdge.y   =   relativeSphereCenter.y    ;
+		radiusEdge.z   =   relativeSphereCenter.z    ;
+		
+		relativeSphereCenter.X  =  ((relativeSphereCenter.x * DISTANCE_FOCAL) / relativeSphereCenter.z) + (RES_HORIZ / 2)    ;	
+		relativeSphereCenter.Y  =  ((relativeSphereCenter.y * DISTANCE_FOCAL) / relativeSphereCenter.z) + (RES_VERT  / 2)    ;
+		
+		radiusEdge.X  =  ((radiusEdge.x * DISTANCE_FOCAL) / radiusEdge.z) + (RES_HORIZ / 2)    ;	
+		radiusEdge.Y  =  ((radiusEdge.y * DISTANCE_FOCAL) / radiusEdge.z) + (RES_VERT  / 2)    ;
+		
+		dbg1X = relativeSphereCenter.X  ;
+		dbg1Y = relativeSphereCenter.Y  ;
+		dbg2X = radiusEdge.X  ;
+		dbg2Y = radiusEdge.Y  ;
+	}*/
+
 	// test if the sphere center is behind the camera
 	if(relativeSphereCenter.z < 0)
 	{
-		if(twoPointsDistance(&relativeSphereCenter, &origin) < objet->radius)
+		if(twoPointsDistance(&relativeSphereCenter, &origin) < (int)(objet->scale * objet->radius))
 		{
 			becomeVisible    =   true    ;			
 		}
 		else
 		{
-			becomeVisible    =   false   ;			
+			becomeVisible    =   false   ;	
 		}
 	}
 	else
 	{
 		// test if the object is too far away from the camera, outside the horizon
-		if(relativeSphereCenter.z - objet->radius > HORIZON_END)
+		if(relativeSphereCenter.z - (int)(objet->radius * objet->scale) > HORIZON_END)
 		{
-			becomeVisible    =   false   ;			
+			becomeVisible    =   false   ;				
 		}
 		else
 		{
 			int   dist   =   (int)(DISTANCE_FOCAL/(float)RES_HORIZ_DIV_2 * relativeSphereCenter.x + relativeSphereCenter.z) / sqrt((DISTANCE_FOCAL * DISTANCE_FOCAL) / (float)(RES_HORIZ_DIV_2 * RES_HORIZ_DIV_2) + 1) ; // calculate the distance from the sphere center to the camera frustum horizontal left plane
 			
 			// test if the sphere center is outside the camera frustum horizontal left plane
-			if((dist < 0) && (abs(dist) > objet->radius))
+			if((dist < 0) && (abs(dist) > (int)(objet->radius * objet->scale)))
 			{
-				becomeVisible    =   false   ;				
+				becomeVisible    =   false   ;
 			}
 			else
 			{
 				dist   =   (int)(DISTANCE_FOCAL/(float)RES_HORIZ_DIV_2 * relativeSphereCenter.x - relativeSphereCenter.z) / sqrt((DISTANCE_FOCAL * DISTANCE_FOCAL) / (float)(RES_HORIZ_DIV_2 * RES_HORIZ_DIV_2) + 1) ; // calculate the distance from the sphere center to the camera frustum horizontal right plane
 				
 				// test if the sphere center is outside the camera frustum horizontal right plane
-				if((dist > 0) && (abs(dist) > objet->radius))
+				if((dist > 0) && (abs(dist) > (int)(objet->radius * objet->scale)))
 				{
 					becomeVisible    =   false   ;					
 				}
@@ -4240,18 +4299,18 @@ void    frustumCulling(Objet* objet)
 					dist   =   (int)(DISTANCE_FOCAL/(float)RES_VERT_DIV_2 * relativeSphereCenter.y + relativeSphereCenter.z) / sqrt((DISTANCE_FOCAL * DISTANCE_FOCAL) / (float)(RES_VERT_DIV_2 * RES_VERT_DIV_2) + 1) ; // calculate the distance from the sphere center to the camera frustum vertical top plane
 					
 					// test if the sphere center is outside the camera frustum vertical top plane
-					if((dist < 0) && (abs(dist) > objet->radius))
+					if((dist < 0) && (abs(dist) > (int)(objet->radius * objet->scale)))
 					{
-						becomeVisible    =   false   ;						
+						becomeVisible    =   false   ;	
 					}
 					else
 					{
 						dist   =   (int)(DISTANCE_FOCAL/(float)RES_VERT_DIV_2 * relativeSphereCenter.y - relativeSphereCenter.z) / sqrt((DISTANCE_FOCAL * DISTANCE_FOCAL) / (float)(RES_VERT_DIV_2 * RES_VERT_DIV_2) + 1) ; // calculate the distance from the sphere center to the camera frustum vertical bottom plane
 						
 						// test if the sphere center is outside the camera frustum vertical bottom plane
-						if((dist > 0) && (abs(dist) > objet->radius))
+						if((dist > 0) && (dist > (int)(objet->radius * objet->scale)))
 						{
-							becomeVisible    =   false   ;							
+							becomeVisible    =   false   ;						
 						}
 						else
 						{
@@ -4263,7 +4322,7 @@ void    frustumCulling(Objet* objet)
 			}
 		}
 	}
-
+	
 	// update the visibility status of the object and add/remove it from the scene accordingly
 	if((objet->isVisible == false)&&(becomeVisible == true))
 	{
@@ -4393,20 +4452,16 @@ void    cameraMovement(Button* buttons, int speed, float spin)
 void   transformToCameraPerspective(Objet* objet)
 {
 	Point   relativeCenter   ;
-
-	if(objet->isVisible == false) 
+	
+	if(!objet->isVisible)
 		return   ;
-
-	relativeCenter.x   =    objet->center.x - camera.posX   ;
-	relativeCenter.y   =    objet->center.y - camera.posY   ;
-	relativeCenter.z   =    objet->center.z - camera.posZ   ;	
 	
 	for(int i = 0 ; i < objet->nbrePts ; i++)
 	{
-		objet->ptsVsl[i].x     =   objet->ptsWrd[i].x + relativeCenter.x    ;
-		objet->ptsVsl[i].y     =   objet->ptsWrd[i].y + relativeCenter.y    ;
-		objet->ptsVsl[i].z     =   objet->ptsWrd[i].z + relativeCenter.z    ;		
-	}
+		objet->ptsVsl[i].x     =   objet->ptsWrd[i].x - camera.posX    ;
+		objet->ptsVsl[i].y     =   objet->ptsWrd[i].y - camera.posY    ;
+		objet->ptsVsl[i].z     =   objet->ptsWrd[i].z - camera.posZ    ;
+	}		
 
 	// rotation relative to the camera
 	for(int i = 0 ; i < objet->nbrePts ; i++)
