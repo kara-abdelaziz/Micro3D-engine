@@ -8,22 +8,38 @@ Unlike modern engines that rely on GPU acceleration (OpenGL, DirectX, or Vulkan)
 
 ## About the project
 
-The **Micro3D engine** project is a 3D graphics rendering engine implemented from scratch. The engine is a **rasterizer**, the most well-known algorithm for real-time 3D.
+The **Micro3D engine** is a lightweight 3D graphics project written in pure C. Originally developed to demystify the mechanics of 3D synthesis, it has evolved from a simple student experiment into a capable **software rasterizer** that recreates the authentic visual "soul" of the 32-bit console era (mainly Playstation 1).
 
-The ultimate goal was to recreate a rendering engine using the bare minimum of external libraries. The SDL library was used almost exclusively to provide a function for drawing a point (pixel) with a given color. Everything else—projection, rotation, scaling, texturing (scanlines), and back-face culling—was implemented manually through programming.
+### The "Single Pixel" Philosophy
+The ultimate goal of this project was to build a 3D world using the absolute minimum of external assistance. While the engine has recently been migrated to **SDL3**, the library is used almost exclusively as a minimal framebuffer to push raw pixels to the screen. Every critical 3D operation is implemented manually on the **CPU**:
+*   **Mathematics:** Custom rotation, scaling, and translation.
+*   **Projection:** Manual 3D-to-2D perspective projection math.
+*   **Rasterization:** A custom scanline-based texture mapper (Affine mapping similar to the PS1 console).
+*   **Optimization:** Back-face culling and Frustum Culling implemented from scratch.
 
-_*Note :* This code reflects student work; it is raw, sparsely commented, and variables are not always explicit, but it proves that a 3D world can be built starting from a single pixel._
+### Evolution & Scale
+Since its inception, the engine has expanded to handle much more than a basic cube. It now supports:
+*   **Wavefront (.obj) Parsing:** Loading complex geometry and UV data for 3D models saved in **.obj** file format. The parsing is not totally functional for now, the file should contains only one mesh and one texture image, which it is always possible to do beforehand in Blender or other 3D software.
+*   **Advanced Environments:** Utilizing **Level Partitioning** and **Culling** to navigate massive environments, including full large 3D levels.
+*   **Camera System:** Full 6-degree-of-freedom navigation through 3D space.
+
+_*Note :* This code reflects a journey that began during my student years. It is raw, experimental, and the variables are not always explicit. However, it stands as a functional proof that with raw C math, a complex 3D world can be built starting from a single pixel._
 
 ---
 
 ## 🚀 Features
 
-*   **Real-time Rasterization:** Efficient software-based rendering pipeline.
+*   **Real-time Rasterization:** A custom-built pipeline that calculates every pixel on the CPU without GPU assistance.
+*   **Perspective Projection:** Manual conversion of 3D world coordinates into 2D screen space using classic focal length math.
+*   **Affine Texture Mapping:** Manual scanline-based implementation for wrapping images onto surfaces, recreating the iconic "texture warping" aesthetic of the 32-bit era.
+*   **Painter's Algorithm:** Dynamic depth sorting of triangles (farthest to nearest) to handle visibility, identical to the PlayStation 1's hardware logic.
 *   **3D Transformations:** Full support for Translation, Rotation, and Scaling.
-*   **Perspective Projection:** Converting 3D world coordinates into 2D screen coordinates.
-*   **Texture Mapping:** Manual scanline-based implementation for wrapping images onto 3D surfaces.
-*   **Back-Face Culling:** Optimization technique to skip rendering polygons facing away from the viewer.
-*   **Modernized for SDL3:** Recently migrated from legacy SDL 1.2 to the modern **SDL3** framework.
+*   **Interactive Camera:** Full 6-degree-of-freedom navigation through 3D environments.
+*   **Back-Face Culling:** Mathematical optimization that skips rendering of polygons facing away from the camera.
+*   **Frustum Culling:** Real-time visibility check using **Bounding Spheres** to ignore objects outside the camera's pyramid of vision.
+*   **Level Partitioning:** Ability to handle massive environments by fragmenting maps into dozens of manageable chunks loaded on the fly.
+*   **Wavefront (.obj) Parser:** Custom-written loader for 3D geometry and UV coordinates, supporting complex models with thousands of faces.
+*   **Modernized for SDL3:** Recently migrated from legacy SDL 1.2 to the modern **SDL3** framework (Core, Image, Mixer, and TTF).
 
 ## 🚧 Roadmap & Limitations
 
