@@ -1863,7 +1863,7 @@ void    initialisation(void)
 	
 	Objet*    raziel    =  malloc(sizeof(Objet))  ;
 	Objet*    dino      =  malloc(sizeof(Objet))  ;
-	Objet*    kratos    =  malloc(sizeof(Objet))  ;
+	//Objet*    kratos    =  malloc(sizeof(Objet))  ;
 	Objet*    cube      =  malloc(sizeof(Objet))  ;
 	Objet*    heihachi  =  malloc(sizeof(Objet))  ;
 
@@ -1912,9 +1912,9 @@ void    initialisation(void)
 	//controlledPlayer =  room00   ;
 	
 	loadCube(cube)              ;
-	loadOBJfile("Raziel/Raziel.obj", raziel)     ;	
-	loadOBJfile("assets/dino/dino.obj", dino)    ;
-	loadOBJfile("assets/kratos/kratos.obj", kratos)         ;	
+	loadOBJfile("Raziel/Raziel.obj", raziel)                ;	
+	loadOBJfile("assets/dino/dino.obj", dino)               ;
+	//loadOBJfile("assets/kratos/kratos.obj", kratos)         ;	
 	loadOBJfile("assets/TR1-level1/room00.obj", room00)     ;
 	loadOBJfile("assets/TR1-level1/room01.obj", room01)     ;
 	loadOBJfile("assets/TR1-level1/room02.obj", room02)     ;
@@ -2002,20 +2002,20 @@ void    initialisation(void)
 	allObjet[41]  =     cube  ;
 	allObjet[42]  =   raziel  ;
 	allObjet[43]  =    dino   ;
-	allObjet[44]  =   kratos  ;
+	//allObjet[44]  =   kratos  ;
 
 	translation(cube, 340000, -10000, -280000)       ;
 	translation(raziel, 290000, -43000, -160000)     ;
 	translation(dino, 27000, 31000, 110000)          ;
-	translation(kratos, 27000, 30000, 110000)        ;
+	//translation(kratos, 27000, 30000, 110000)        ;
 	localRotationScale(dino, PI, 0.0, 0.0, 1.0)      ;
 	localRotationScale(raziel, PI, 0.0, 0.0, 20.0)   ;
-	localRotationScale(kratos, PI, 0.0, 0.0, 1.0)   ;
+	//localRotationScale(kratos, PI, 0.0, 0.0, 1.0)   ;
 
 
 	//allObjet[0]     =   kratos    ;
 
-	nbreOjectScene   =   45     ;	
+	nbreOjectScene   =   44     ;	
 	
 	//////------------------------Camera Initialization ------------------------------//////
 
