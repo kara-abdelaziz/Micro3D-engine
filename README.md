@@ -43,14 +43,21 @@ _*Note :* This code reflects a journey that began during my student years. It is
 
 ## 🚧 Roadmap & Limitations
 
-This engine is a foundational tool and currently lacks several advanced features found in production engines:
-- [ ] **Z-Buffering:** Depth testing is not yet implemented (relies on draw order).
-- [ ] **Camera Transformations:** The view is currently fixed to a world origin.
-- [ ] **Clipping:** Handling polygons that intersect the screen boundaries.
+As an educational project, the Micro3D engine focuses on fundamental principles. While several milestones have been reached, there are still technical challenges to solve:
+
+### ✅ Recently Implemented
+- [x] **Camera Navigation:** Transitioned from a static view to full 6-degree-of-freedom navigation by transforming world coordinates relative to the viewer.
+- [x] **Frustum Culling:** Implemented object-level visibility checks using bounding spheres to maintain high performance in complex scenes.
+- [x] **Multi-Object Scene Management:** Added support for a global render list, allowing the sorting and drawing of multiple independent models simultaneously.
+
+### 🛠️ Current Roadmap
+- [ ] **Gouraud Shading:** Adding per-vertex lighting interpolation to move beyond flat textures and achieve smoother, more realistic surfaces.
+- [ ] **Physics & Collision Detection:** Implementing bounding volume math (Spheres and AABBs) for object-to-wall interactions and **Ray-to-Triangle intersection** for floor-following and gravity.
+- [ ] **Hierarchical Animation (rigged doll animation):** Implementing a parent-child relationship system for objects. This will allow for "action figure" style character animation where limbs (separate meshes) rotate around pivot points.
 
 ## 🎮 Controls (Layout Independent)
 
-The engine uses physical scancodes, making it compatible with both **AZERTY** and **QWERTY** layouts automatically.
+The engine uses physical scancodes, making it compatible with both **AZERTY** and **QWERTY** layouts automatically. The keys move the camera through 3D space:
 
 | Action | AZERTY Key | QWERTY Key |
 | :--- | :--- | :--- |
@@ -58,7 +65,6 @@ The engine uses physical scancodes, making it compatible with both **AZERTY** an
 | **Move Left/Right** | `Q` / `D` | `A` / `D` |
 | **Move Up/Down** | `A` / `E` | `Q` / `E` |
 | **Rotate** | Arrow Keys | Arrow Keys |
-| **Scale Up/Down** | Numpad `+` / `-` | Numpad `+` / `-` |
 | **Sound FX** | `F1` - `F12` | `F1` - `F12` |
 | **Quit** | `Echap` | `Esc` |
 
