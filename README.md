@@ -41,6 +41,8 @@ _*Note :* This code reflects a journey that began during my student years. It is
 *   **Wavefront (.obj) Parser:** Custom-written loader for 3D geometry and UV coordinates, supporting complex models with thousands of faces.
 *   **Modernized for SDL3:** Recently migrated from legacy SDL 1.2 to the modern **SDL3** framework (Core, Image, Mixer, and TTF).
 
+[![3DMicro-engine](Screenshot_youtube.jpg)](https://youtu.be/Ag3sv5Q6hb0?si=ZsussARZkPEZVsqV)
+
 ## 🚧 Roadmap & Limitations
 
 As an educational project, the Micro3D engine focuses on fundamental principles. While several milestones have been reached, there are still technical challenges to solve:
