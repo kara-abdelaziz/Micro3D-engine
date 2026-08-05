@@ -1,5 +1,6 @@
 #include  <stdio.h>
 #include  <stdlib.h>
+#include  <string.h>
 #include  <math.h>
 
 #include <SDL3/SDL.h>
@@ -37,22 +38,24 @@ typedef     MIX_Audio Mix_Music  ;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-#define   NBRE_POINT_MAX     100
-#define   NBRE_SEG_MAX       100
-#define   NBRE_OBJET_MAX     100
-#define   NBRE_FACE_MAX      100
+#define   PI 3.14159265358979323846
 
-#define   DISTANCE           512
+#define   NBRE_POINT_MAX       7000
+#define   NBRE_SEG_MAX         7000
+#define   NBRE_OBJET_MAX        200
+#define   NBRE_FACE_MAX        7000
+#define   NBRE_FACE_MAX_SCENE 20000
+
+#define   DISTANCE_FOCAL     512
 #define   RES_VERT           600
 #define   RES_HORIZ          800
 #define   RES_VERT_DIV_2     300
 #define   RES_HORIZ_DIV_2    400
 
-#define   FRAMES_PER_SECOND   60  // Can go up to 400 FPS on my PC :)
-
+#define   HORIZON_END           300000
+#define   FRAMES_PER_SECOND         60
 
 ////-------------------------variables globales-------------------------------------/////
-
 
 // The "affichage" in SDL 1.2 was the screen.
 // In SDL3, "affichage" is a CPU buffer we create manually.
@@ -77,7 +80,7 @@ Mix_Music*     music         =   NULL   ;
 
 Mix_Chunk*     transl        =   NULL   ;
 Mix_Chunk*     rotation      =   NULL   ;
-Mix_Chunk*     echell        =   NULL   ;
+Mix_Chunk*     scale         =   NULL   ;
 
 Mix_Chunk*     sonF1         =   NULL   ;
 Mix_Chunk*     sonF2         =   NULL   ;
@@ -108,588 +111,244 @@ typedef  struct  point
 	int   Y  ;
 }  Point  ;
 
+typedef  struct  objet  Objet   ;
+typedef  struct  face
+{
+	Point*         vertices[3]  ;      // addresses of the visual vertices
+
+	Point          nrmOrg       ;      // normal vector of the original triangle
+	Point          nrmWrd       ;      // normal vector of the world triangle
+	Point          nrmVsl       ;	   // normal vector of the visual triangle
+
+	int            uv[3][2]     ;      // UV coordinates of the face triangle
+	SDL_Surface*   texture      ;      // texture map of the face triangle
+	Objet*         owner        ;      // pointer to the object owner of the face
+}  Face  ;
+
 typedef  struct  objet
 {
-	int     nbrePts                     ;
-	Point   points[NBRE_POINT_MAX]      ;
-	Point   ptsOrg[NBRE_POINT_MAX]      ;
+	// 3 types of points are used in the 3D pipeline:
+	// ptsOrg: is the original point, it is the starting point of the 3D pipeline
+	// ptsWrd: is the point after transformation (rotation scale and translation) in the world
+	// ptsVsl: is the point after the transformation relative to the camera
 
-	int     nbreSegment                 ;
-	Point*  segments[NBRE_SEG_MAX][2]   ;
+	int     nbrePts                     ;     // number of vertices in the 3D object
+	Point   ptsOrg[NBRE_POINT_MAX]      ;	  // original vertices without any transformation
+	Point   ptsWrd[NBRE_POINT_MAX]      ;     // vertices after transformation in the world
+	Point   ptsVsl[NBRE_POINT_MAX]      ;     // vertices transformed to be visualized by the camera
 
-	int     nbreFace                       ;
-	Point*  faces[NBRE_FACE_MAX][4]        ;
-	Point   normale[NBRE_FACE_MAX]         ;
-	Point   nrmOrg[NBRE_FACE_MAX]          ;
-	int     faceTxtr[NBRE_FACE_MAX][3][2]  ;
-	SDL_Surface*   texture                 ;
-	
-	Point   centre             ;
+	int     nbreSegment                 ;	  // number of segments
+	Point*  segments[NBRE_SEG_MAX][2]   ;	  // segments used to draw wireframe 3D object
+
+	int     nbreFace                    ;	  // number of faces
+	Face    faces[NBRE_FACE_MAX]        ;     // triangles used to draw 3D object
+	SDL_Surface*   texture              ;	  // texture map of the 3D object
+
+	Point   center     ;              // absolute position of the 3D object inside the world
+	float   angleX     ;	          // absolute X rotation of the 3D object inside the world
+	float   angleY     ;	          // absolute Y rotation of the 3D object inside the world
+	float   angleZ     ;	          // absolute Z rotation of the 3D object inside the world
+
+	float   scale      ;              // scale of the 3D object
+
+	Point   orgSphrCent    ;         // a sphere that warp the object used for object culling (original sphere center)
+	Point   wrdSphrCent    ;         // a sphere that warp the object used for object culling after transformation (world sphere center)
+	int     radius         ;         // this is the original radius of the object, it should be scaled by the scale value.
+
+	bool    isVisible       ;         // is the object visible or not depending on the frustum culling
+}  Objet  ;
+
+struct   Camera
+{
 	float   angleX             ;
 	float   angleY             ;
 	float   angleZ             ;
-	float   echell             ;
 
-	int     radius             ;
-}  Objet  ;
+	int     posX               ;
+	int     posY               ;
+	int     posZ               ;
+}   camera  ;
 
-typedef  struct  objets
+typedef  struct   buttons
 {
-	int      nbreObjet                    ;
-	Objet    toutObjet[NBRE_OBJET_MAX]    ;
-}  Objets  ;
+	int   left     ;
+	int   right    ;
+	int   up       ;
+	int   down     ;
+	int   pageUp   ;
+	int   pageDown ;
 
+	int   W        ;
+	int   A        ;
+	int   S        ;
+	int   D        ;
+	int   Q        ;
+	int   E        ;
+
+	int   plus     ;
+	int   minus    ;
+
+	int   F1       ;
+	int   F2       ;
+	int   F3       ;
+	int   F4       ;
+	int   F5       ;
+	int   F6       ;
+	int   F7       ;
+	int   F8       ;
+	int   F9       ;
+	int   F10      ;
+	int   F11      ;
+	int   F12      ;
+
+	int   escape   ;
+}  Button         ;
 
 ////-------------------------------variables globales-------------------------------------/////
 
-
-void    initialisation(Objet* cube)  ;
+void    initialisation(void)    ;
 void    initSDL(void)           ;
 void    attendreTouche(void)    ;
 void    dessinerEtoiles(void)   ;
 void    dessinerLignes(void)    ;
-void    dessinEnv2D(void)       ;
+void    drawBackground(void)    ;
+void    drawHUD(void)			;
+void    displayScene()          ;
+void    cleanUp()               ;
+void    loadCube(Objet*  cube)  ;
+void    addObjectToScene(Objet*  objet)       ;
+void    removeObjectFromScene(Objet*  objet)  ;
+void    afficheObjetMesh(Objet*  mesh)        ;
+void    drawButtons(Button* buttons)          ;
+void    movementSoundEffect(Button* buttons)  ;
+void    frustumCulling(Objet* objet)	      ;
+void    PlayerMovement(Button* buttons, Objet* player)               ;
+void    transformToCameraPerspective(Objet* objet)                   ;
+void    cameraMovement(Button* buttons, int speed, float spin)       ;
+static  inline  void    localRotationScale(Objet * objet, float deltaX, float deltaY, float deltaZ, float deltaScale)  ;
 static  inline  void    translation(Objet * objet , int Dx , int Dy , int Dz)        ;
-static  inline  void    changementEchell_rotation(Objet * objet)                     ;
 static  inline  void    swap(int * a , int * b)                                      ;
-static inline   void    Mix_PlayChannel_Bridge(int ch, MIX_Audio* audio, int loops)  ;
+static  inline  void    Mix_PlayChannel_Bridge(int ch, MIX_Audio* audio, int loops)  ;
 void    ligne(int x0, int y0, int x1, int y1, Uint32  couleur)    ;
-void    afficheObjetMesh(Objet*  cube)                            ;
-void    afficheObjetTexture(Objet*  cube)                         ;
 void    animationRadar(int X , int Y , float R)                   ;
 void    animationTexte(void)                                      ;
+int     handleInputs(Button* buttons)                             ;
+int     twoPointsDistance(Point* p1, Point* p2)                   ;
 static  inline  void     setPixel(int  X , int  Y , Uint32  couleur)      ;
 static  inline  Uint32   getPixel(int  X , int  Y , SDL_Surface*  image)  ;
 static  inline  void     triTableau(int tableau[][2] , int * position , int action , int y)    ;
 static  inline  void     delTableau(int tableau[][2] , int * taille , int action)              ;
-SDL_Surface*     chargerImage(const  char*  file)        ;
-void             chargementFichirs()              ;
-bool             Mix_OpenAudio()                  ;
-void             cleanUp()                        ;
-void             triangle(int X0 , int Y0 , int X1 , int Y1 ,int X2 ,int Y2) ;
+Point     calculateFaceNormal(Point* nrm, Point* v1, Point* v2, Point* v3)     ;
+SDL_Surface*     chargerImage(const  char*  file)          ;
+bool      loadOBJfile(const  char*  path, Objet*  objet)   ;
+void      chargementFichirs()        ;
+bool      Mix_OpenAudio()            ;
+void      painterAlgorithmSort()     ;
 
+////------------------------------Static program variables-----------------------------------/////
 
+Face*        facesQueue[NBRE_FACE_MAX_SCENE]    ;
+int          nbreFaceScene      =   0           ;
+
+Objet*       allObjet[NBRE_OBJET_MAX]      ;
+int          nbreOjectScene     =   0      ;
+
+Objet*       controlledPlayer   =   NULL   ;
+
+int          dbg1X, dbg1Y, dbg2X, dbg2Y    ;   // for debugging purpose, used line function as global parameters to display a line whatever anywhere from the program
 
 ////--------------------------------Fonction principale-------------------------------------/////
-//#undef main
 
 int   main(int  argc , char**  argv)
 {
+	Button      buttons  =   { 0 }   ;
+	
 	int         quitter  =  1   ;
-	Objet       cube            ;
-	
-	//Uint8 *     keystates     ;
-	SDL_Rect    rectSrc         ;
-	SDL_Rect    rectDst         ;
-	
+		
 	int         FPS  =   0      ;
 	int         i    =   1      ;
 	int         temps           ;
+
+	int     Dx      =   10      ;
+	int     Dy      =   10      ;
+	int     Dz      =   10      ;
 	
-	initialisation(&cube);
+	float   angleX  =   0.0f   ;
+	float   angleY  =   0.0f   ;
+	float   angleZ  =   0.0f   ;
+	float   scale   =  10.0f   ;
+
+	///////-----------------------------Initialisation-----------------------------////////
 	
+	initialisation()            ;
+		
 	///////--------------------------------------test------------------------------------////////
 
-
-	//ligne(-100 , 200 , 750 , 200 , SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;	
-
-	//setPixel( 800 , 600 , SDL_MapRGB(affichage->format , 5 , 200 , 128))   ;
-
-	//sleep(1000)  ;
-	
+	//ligne(-100 , 200 , 750 , 200 , SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;		
 	//dessinerEtoiles()         ;
 	//dessinerLignes()          ;
 
-	//SDL_UpdateRect(affichage, 0, 0, 0, 0)   ;	
+	///////------------------------------Main loop---------------------------------////////
 
 	while(quitter)
 	{
+		//  get the initial time in the beginning of the frame
 		temps       =   SDL_GetTicks()            ;
 		
-		SDL_PumpEvents()                          ;
+		///////---------------First phase :  capture all the keyboard inputs---------------///////
 		
-		SDL_Event       event                     ;
-
-		const bool *keystates = SDL_GetKeyboardState(NULL)  ;
-		
-		
-		int   sonTransl , sonRotation , sonEchell ;
-		
-		/////-------------affichage de toute la scène par le changement du buffer------------///////
-		
-		dessinEnv2D()   ;
-		
-		changementEchell_rotation(&cube)    ;
-		
-		//afficheObjetMesh(&cube)    ;
-		afficheObjetTexture(&cube)  ;
-		
-		/////---------------------------dessin des images 2D--------------------------------///////
-		
-		rectDst.x    =    0    ;
-		rectDst.y    =    500  ;
-		
-		SDL_BlitSurface(paneau, NULL, affichage, &rectDst)     ;
-		
-		rectDst.x    =    0    ;
-		rectDst.y    =    127  ;
-		
-		SDL_BlitSurface(grid, NULL, affichage, &rectDst)       ;
-		
-		rectDst.x    =    0    ;
-		rectDst.y    =    80   ;
-		
-		SDL_BlitSurface(map, NULL, affichage, &rectDst)        ;
-		
-		rectDst.x    =    0    ;
-		rectDst.y    =    0    ;
-		
-		SDL_BlitSurface(entete, NULL, affichage, &rectDst)     ;
-		
-		animationTexte()                                              ;
-		animationRadar(cube.centre.x , cube.centre.z , cube.echell)   ;
-		
-		rectSrc.h   =    40      ;
-		rectSrc.w   =    40      ;
-		
-		if(keystates[SDL_SCANCODE_UP])
-		{
-			changementEchell_rotation(&cube)     ;
-			cube.angleX     -=   0.05            ;
-			
-			rectSrc.x   =   40     ;
-			rectSrc.y   =   0      ;
-			
-			rectDst.x   =   315    ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		else
-		{
-			rectSrc.x   =   40     ;
-			rectSrc.y   =   40     ;
-			
-			rectDst.x   =   315    ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_DOWN])
-		{
-			changementEchell_rotation(&cube)     ;
-			cube.angleX     +=   0.05            ;
-			
-			rectSrc.x   =   80     ;
-			rectSrc.y   =   0      ;
-			
-			rectDst.x   =   315    ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		else
-		{
-			rectSrc.x   =   80     ;
-			rectSrc.y   =   40     ;
-			
-			rectDst.x   =   315    ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_RIGHT])
-        	{
-			changementEchell_rotation(&cube)     ;
-			cube.angleY     -=   0.05            ;
-			
-			rectSrc.x   =   120    ;
-			rectSrc.y   =   0      ;
-			
-			rectDst.x   =   365    ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		else
-		{
-			rectSrc.x   =   120    ;
-			rectSrc.y   =   40     ;
-			
-			rectDst.x   =   365    ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_LEFT])
-		{
-			changementEchell_rotation(&cube)     ;
-			cube.angleY     +=   0.05            ;
-			
-			rectSrc.x   =   0      ;
-			rectSrc.y   =   0      ;
-			
-			rectDst.x   =   265    ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		else
-		{
-			rectSrc.x   =   0      ;
-			rectSrc.y   =   40     ;
-			
-			rectDst.x   =   265    ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_PAGEUP])
-		{
-			changementEchell_rotation(&cube)     ;
-			cube.angleZ     -=   0.05            ;
-			
-			rectSrc.x   =   160    ;
-			rectSrc.y   =   0      ;
-			
-			rectDst.x   =   265    ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		else
-		{
-			rectSrc.x   =   160    ;
-			rectSrc.y   =   40     ;
-			
-			rectDst.x   =   265    ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_PAGEDOWN])
-		{
-			changementEchell_rotation(&cube)     ;
-			cube.angleZ     +=   0.05            ;
-			
-			rectSrc.x   =   200    ;
-			rectSrc.y   =   0      ;
-			
-			rectDst.x   =   365    ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		else
-		{
-			rectSrc.x   =   200    ;
-			rectSrc.y   =   40     ;
-			
-			rectDst.x   =   365    ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_W] && (cube.centre.z < 12100))
-		{
-			translation(&cube , 0 , 0 ,  5)    ;
-			
-			rectSrc.x   =   40     ;
-			rectSrc.y   =   80     ;
-			
-			rectDst.x   =   90     ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-			
-		}
-		else
-		{
-			rectSrc.x   =   40     ;
-			rectSrc.y   =   120    ;
-			
-			rectDst.x   =   90     ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_S] && (cube.centre.z > 1500))
-		{
-			translation(&cube , 0 , 0 , -5)    ;
-			
-			rectSrc.x   =   80     ;
-			rectSrc.y   =   80     ;
-			
-			rectDst.x   =   90     ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-			
-		}
-		else
-		{
-			rectSrc.x   =   80     ;
-			rectSrc.y   =   120    ;
-			
-			rectDst.x   =   90     ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_D] && (cube.centre.x < 4500))
-		{
-			translation(&cube ,  5 , 0 , 0)    ;
-			
-			rectSrc.x   =   0      ;
-			rectSrc.y   =   80     ;
-			
-			rectDst.x   =   140    ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-			
-		}
-		else
-		{
-			rectSrc.x   =   0      ;
-			rectSrc.y   =   120    ;
-			
-			rectDst.x   =   140    ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_A] && (cube.centre.x > -4500))
-        	{
-			translation(&cube , -5 , 0 , 0)    ;
-			
-			rectSrc.x   =   120    ;
-			rectSrc.y   =   80     ;
-			
-			rectDst.x   =   40     ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-			
-		}
-		else
-		{
-			rectSrc.x   =   120    ;
-			rectSrc.y   =   120    ;
-			
-			rectDst.x   =   40     ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_Q] && (cube.centre.y > -4500))
-		{
-			translation(&cube , 0 , -5 , 0)    ;
-			
-			rectSrc.x   =   160    ;
-			rectSrc.y   =   80     ;
-			
-			rectDst.x   =   40     ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-			
-		}
-		else
-		{
-			rectSrc.x   =   160    ;
-			rectSrc.y   =   120    ;
-			
-			rectDst.x   =   40     ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_E] && (cube.centre.y < 4500))
-        	{
-			translation(&cube , 0 ,  5 , 0)    ;
-			
-			rectSrc.x   =   200    ;
-			rectSrc.y   =   80     ;
-			
-			rectDst.x   =   140    ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-			
-		}
-		else
-		{
-			rectSrc.x   =   200    ;
-			rectSrc.y   =   120    ;
-			
-			rectDst.x   =   140    ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_KP_PLUS] && (cube.echell < 1.1f))
-		{
-			cube.echell     +=   0.002        ;
-			changementEchell_rotation(&cube)  ;
-			
-			rectSrc.x   =   240    ;
-			rectSrc.y   =   0      ;
-			
-			rectDst.x   =   500-20    ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		else
-		{
-			rectSrc.x   =   240    ;
-			rectSrc.y   =   40     ;
-			
-			rectDst.x   =   500-20    ;
-			rectDst.y   =   520    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_KP_MINUS] && (cube.echell > 0.5f))
-        	{
-			cube.echell     -=   0.002        ;
-			changementEchell_rotation(&cube)  ;
-			
-			rectSrc.x   =   240    ;
-			rectSrc.y   =   80     ;
-			
-			rectDst.x   =   500-20    ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		else
-		{
-			rectSrc.x   =   240    ;
-			rectSrc.y   =   120    ;
-			
-			rectDst.x   =   500-20    ;
-			rectDst.y   =   560    ;
-			
-			SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_ESCAPE])
-        {
-			quitter  =   0    ;
-		}
-		
-		if(keystates[SDL_SCANCODE_Q] || keystates[SDL_SCANCODE_S] || keystates[SDL_SCANCODE_D] || keystates[SDL_SCANCODE_A] || keystates[SDL_SCANCODE_W] || keystates[SDL_SCANCODE_E])
-		{
-			Mix_Resume(1)    ;
-		}
-		else
-		{
-			Mix_Pause(1)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_UP] || keystates[SDL_SCANCODE_DOWN] || keystates[SDL_SCANCODE_LEFT] || keystates[SDL_SCANCODE_RIGHT] || keystates[SDL_SCANCODE_PAGEUP] || keystates[SDL_SCANCODE_PAGEDOWN])
-		{
-			Mix_Resume(2)    ;
-		}
-		else
-		{
-			Mix_Pause(2)     ;
-		}
-		
-		if(keystates[SDL_SCANCODE_KP_PLUS] || keystates[SDL_SCANCODE_KP_MINUS])
-		{
-			Mix_Resume(3)    ;
-		}
-		else
-		{
-			Mix_Pause(3)     ;
-		}
-		
-		while(SDL_PollEvent(&event)) 
-		{
-    		if (event.type == SDL_EVENT_QUIT) 
-			{
-        		quitter = 0;
-    		}
-
-    		if (event.type == SDL_EVENT_KEY_DOWN) 
-			{
-        		// For F1-F12 keys, we still use Keycodes (.key.key)
-				if(event.key.scancode == SDL_SCANCODE_F1)
-				{
-					Mix_PlayChannel(4 , sonF1 , 0)     ;
-				}
-
-				if(event.key.scancode == SDL_SCANCODE_F2)
-				{
-					Mix_PlayChannel(4 , sonF2 , 0)     ;
-				}
-
-				if(event.key.scancode == SDL_SCANCODE_F3)
-				{
-					Mix_PlayChannel(4 , sonF3 , 0)     ;
-				}
-
-				if(event.key.scancode == SDL_SCANCODE_F4)
-				{
-					Mix_PlayChannel(4 , sonF4 , 0)     ;
-				}
-				if(event.key.scancode == SDL_SCANCODE_F5)
-				{
-					Mix_PlayChannel(4 , sonF5 , 0)     ;
-				}
-
-				if(event.key.scancode == SDL_SCANCODE_F6)
-				{
-					Mix_PlayChannel(4 , sonF6 , 0)     ;
-				}
+		quitter  =   handleInputs(&buttons)    ;
 				
-				if(event.key.scancode == SDL_SCANCODE_F7)
-				{
-					Mix_PlayChannel(4 , sonF7 , 0)     ;
-				}
+		///////-------------------Second phase :  display background  --------------------///////
+		
+		drawBackground()   ;
+		
+		///////-----------Third phase : Translation/Rotation/Scale of the objects-------------////////////
 
-				if(event.key.scancode == SDL_SCANCODE_F8)
-				{
-					Mix_PlayChannel(4 , sonF8 , 0)     ;
-				}
-				if(event.key.scancode == SDL_SCANCODE_F9)
-				{
-					Mix_PlayChannel(4 , sonF9 , 0)     ;
-				}
+		// for(int i = 0 ; i < nbreOjectScene ; i++)
+		// {
+		// 	localRotationScale(allObjet[i], angleX, angleY, angleZ, scale)     ;
+		// 	translation(allObjet[i], Dx, Dy, Dz)	                                    ;
+		// }
 
-				if(event.key.scancode == SDL_SCANCODE_F10)
-				{
-					Mix_PlayChannel(4 , sonF10 , 0)    ;
-				}
-				
-				if(event.key.scancode == SDL_SCANCODE_F11)
-				{
-					Mix_PlayChannel(4 , sonF11 , 0)    ;
-				}
+		angleX  +=   0.1f   ;
+		angleY  +=   0.1f   ;
 
-				if(event.key.scancode == SDL_SCANCODE_F12)
-				{
-					Mix_PlayChannel(4 , sonF12 , 0)    ;
-				}
-            }
-		}
+		// raziel animation	
+		localRotationScale(allObjet[42], PI, angleY, 0.0, 20.0)  ;
+	
+		// cube animation
+		if(allObjet[41]->center.z >= -280000)      Dz  =   -1000    ;
+		else if(allObjet[41]->center.z < -560000)  Dz  =   +1000    ;
+		
+		translation(allObjet[41], 0, 0 , Dz)   ;
+		localRotationScale(allObjet[41], angleX, 0.0, 0.0, 10.0)     ;
+			
+		///////-----------Fourth phase : Camera and Player movement --------------------///////
+		
+		//PlayerMovement(&buttons, controlledPlayer)  ;
+		cameraMovement(&buttons, 1500, 0.1f)        ;
+		//printf("Camera position: (%d, %d, %d)\n", camera.posX, camera.posY, camera.posZ)   ;
+		
+		///////-----------Fifth phase : 3D pipeline displaying all the objects in the scene--------------////////////
+		///////-----------Pipeline : (original object -> world oject -> camera perspective) -------------////////////
+		
+		//ligne(-20 , 367 , -20 , 367 , SDL_MapRGB(affichage->format, 5 , 200 , 128))  ;
+		//afficheObjetMesh(controlledPlayer)    ;
+		
+		displayScene()  ;
+		
+		///////-----------Sixth phase :  display Buttons and  HUD elements---------------///////
+		
+		drawHUD()               ;		
+		drawButtons(&buttons)   ;
+		
+		///////-----------Seventh phase : emit sound effect---------------///////
 
+		movementSoundEffect(&buttons)  ;
+
+		///////-----------Final phase :  update the frame buffer---------------///////
+		
 		// 1. Upload the pixels the CPU just calculated to the GPU
 		SDL_UpdateTexture(screenTex, NULL, affichage->pixels, affichage->pitch);
 
@@ -701,8 +360,10 @@ int   main(int  argc , char**  argv)
 
 		// 4. Show it!
 		SDL_RenderPresent(renderer);
-
-
+		
+		///////-----------------------Frame rate calculation----------------------------///////
+		
+		// Calculate and ceiling the Frame rate of the game
 		Uint64 now = SDL_GetTicks()     ;
 		Uint64 elapsed = now - temps    ;
 
@@ -710,7 +371,6 @@ int   main(int  argc , char**  argv)
 		{
     		SDL_Delay((1000 / FRAMES_PER_SECOND) - (Uint32)elapsed);
 		}
-
 		//printf("FPS = %i\n", (FPS += 1000 / elapsed)/i++)   ;
 	}
 	
@@ -727,7 +387,7 @@ int   main(int  argc , char**  argv)
 
 ///////-----------------------------------Autres fonctions------------------------------------//////////
 
-void initSDL(void) {
+void  initSDL(void) {
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) 
 	{
@@ -766,13 +426,725 @@ void initSDL(void) {
     }
 }
 
-void   attendreTouche(void)
+void  attendreTouche(void)
 {
 	SDL_Event event             ;
 
 	do
     	SDL_WaitEvent(&event)   ;
 	while (event.type != SDL_EVENT_QUIT && event.type != SDL_EVENT_KEY_DOWN)   ;
+}
+
+int   handleInputs(Button* buttons)
+{
+	SDL_Event event         ;
+
+	SDL_PumpEvents()        ;
+		
+	const bool *keystates = SDL_GetKeyboardState(NULL)  ;
+
+	if(keystates[SDL_SCANCODE_UP])
+	{
+		buttons->up     =   1   ;
+	}
+	else
+	{
+		buttons->up     =   0   ;
+	}
+	
+	if(keystates[SDL_SCANCODE_DOWN])
+	{
+		buttons->down     =   1   ;
+	}
+	else
+	{
+		buttons->down     =   0   ;
+	}
+	
+	if(keystates[SDL_SCANCODE_RIGHT])
+	{
+		buttons->right     =   1   ;
+	}
+	else
+	{
+		buttons->right     =   0   ;
+	}
+	
+	if(keystates[SDL_SCANCODE_LEFT])
+	{
+		buttons->left     =   1   ;
+	}
+	else
+	{
+		buttons->left     =   0   ;
+	}
+	
+	if(keystates[SDL_SCANCODE_PAGEUP])
+	{
+		buttons->pageUp =     1    ;
+	}
+	else
+	{
+		buttons->pageUp =     0    ;
+	}
+	
+	if(keystates[SDL_SCANCODE_PAGEDOWN])
+	{
+		buttons->pageDown   =   1    ;
+	}
+	else
+	{
+		buttons->pageDown   =   0    ;
+	}
+	
+	if(keystates[SDL_SCANCODE_W])// && (controlledPlayer->center.z < 12100))
+	{
+		buttons->W     =   1    ;	
+	}
+	else
+	{
+		buttons->W      =   0      ;
+	}
+	
+	if(keystates[SDL_SCANCODE_S])//  && (controlledPlayer->center.z > 500))
+	{
+		buttons->S     =   1    ;	
+	}
+	else
+	{
+		buttons->S     =   0    ;	
+	}
+	
+	if(keystates[SDL_SCANCODE_D])//  && (controlledPlayer->center.x < 4500))
+	{
+		buttons->D     =   1    ;
+		
+	}
+	else
+	{
+		buttons->D      =   0      ;
+	}
+	
+	if(keystates[SDL_SCANCODE_A])//  && (controlledPlayer->center.x > -4500))
+	{
+		buttons->A      =   1      ;
+	}
+	else
+	{
+		buttons->A      =   0      ;
+	}
+	
+	if(keystates[SDL_SCANCODE_Q])//  && (controlledPlayer->center.y > -4500))
+	{
+		buttons->Q      =   1      ;
+	}
+	else
+	{
+		buttons->Q      =   0      ;
+	}
+	
+	if(keystates[SDL_SCANCODE_E])//  && (controlledPlayer->center.y < 4500))
+	{
+		buttons->E     =   1    ;	
+	}
+	else
+	{
+		buttons->E     =   0    ;
+	}
+	
+	if(keystates[SDL_SCANCODE_KP_PLUS] && (controlledPlayer->scale < 2.0f))
+	{
+		buttons->plus     =   1    ;
+		//removeObjectFromScene(controlledPlayer)   ;
+	}
+	else
+	{
+		buttons->plus     =   0    ;
+	}
+	
+	if(keystates[SDL_SCANCODE_KP_MINUS] && (controlledPlayer->scale > 0.5f))
+	{	
+		buttons->minus     =   1    ;
+		//addObjectToScene(controlledPlayer)   ;
+	}
+	else
+	{
+		buttons->minus     =   0    ;
+	}
+	
+	if(keystates[SDL_SCANCODE_ESCAPE])
+	{
+		buttons->escape     =   1    ;
+		return                  0    ; 
+	}
+	else
+	{
+		buttons->escape     =   0    ;
+	}
+		
+	while(SDL_PollEvent(&event)) 
+	{
+		if (event.type == SDL_EVENT_QUIT) 
+		{
+			return   0  ;
+		}
+
+		if (event.type == SDL_EVENT_KEY_DOWN) 
+		{
+			// For F1-F12 keys, we still use Keycodes (.key.key)
+			if(event.key.scancode == SDL_SCANCODE_F1)
+			{
+				buttons->F1      =   1    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F2)
+			{
+				buttons->F2      =   1    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F3)
+			{
+				buttons->F3      =   1    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F4)
+			{
+				buttons->F4      =   1    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F5)
+			{
+				buttons->F5      =   1    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F6)
+			{
+				buttons->F6      =   1    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F7)
+			{
+				buttons->F7      =   1    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F8)
+			{
+				buttons->F8      =   1    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F9)
+			{
+				buttons->F9      =   1    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F10)
+			{
+				buttons->F10      =   1    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F11)
+			{
+				buttons->F11      =   1    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F12)
+			{
+				buttons->F12      =   1    ;
+			}
+		}
+		
+		if (event.type == SDL_EVENT_KEY_UP)
+		{
+			if(event.key.scancode == SDL_SCANCODE_F1)
+			{
+				buttons->F1      =   0    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F2)
+			{
+				buttons->F2      =   0    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F3)
+			{
+				buttons->F3      =   0    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F4)
+			{
+				buttons->F4      =   0    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F5)
+			{
+				buttons->F5      =   0    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F6)
+			{
+				buttons->F6      =   0    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F7)
+			{
+				buttons->F7      =   0    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F8)
+			{
+				buttons->F8      =   0    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F9)
+			{
+				buttons->F9      =   0    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F10)
+			{
+				buttons->F10      =   0    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F11)
+			{
+				buttons->F11      =   0    ;
+			}
+
+			if(event.key.scancode == SDL_SCANCODE_F12)
+			{
+				buttons->F12      =   0    ;
+			}
+		}
+	}
+
+	return   1  ;
+}
+
+void  drawHUD(void)
+{
+	SDL_Rect    rectSrc         ;
+	SDL_Rect    rectDst         ;
+	
+	rectDst.x    =    0    ;
+	rectDst.y    =    500  ;
+	
+	SDL_BlitSurface(paneau, NULL, affichage, &rectDst)     ;
+	
+	rectDst.x    =    0    ;
+	rectDst.y    =    127  ;
+	
+	SDL_BlitSurface(grid, NULL, affichage, &rectDst)       ;
+	
+	rectDst.x    =    0    ;
+	rectDst.y    =    80   ;
+	
+	SDL_BlitSurface(map, NULL, affichage, &rectDst)        ;
+	
+	rectDst.x    =    0    ;
+	rectDst.y    =    0    ;
+	
+	SDL_BlitSurface(entete, NULL, affichage, &rectDst)     ;
+	
+	animationTexte()                                              ;
+	
+	animationRadar(allObjet[0]->center.x , allObjet[0]->center.z , allObjet[0]->scale)   ;
+	
+	rectSrc.h   =    40      ;
+	rectSrc.w   =    40      ;
+}
+
+void  drawButtons(Button* buttons)
+{
+	SDL_Rect    rectSrc         ;
+	SDL_Rect    rectDst         ;
+	
+	if(buttons->up == 1)
+	{
+		rectSrc.x   =   40     ;
+		rectSrc.y   =   0      ;
+		
+		rectDst.x   =   315    ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	else
+	{
+		rectSrc.x   =   40     ;
+		rectSrc.y   =   40     ;
+		
+		rectDst.x   =   315    ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+
+	if(buttons->down == 1)
+	{
+		rectSrc.x   =   80     ;
+		rectSrc.y   =   0      ;
+		
+		rectDst.x   =   315    ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	else
+	{
+		rectSrc.x   =   80     ;
+		rectSrc.y   =   40     ;
+		
+		rectDst.x   =   315    ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+
+	if(buttons->right == 1)
+	{
+		rectSrc.x   =   120    ;
+		rectSrc.y   =   0      ;
+		
+		rectDst.x   =   365    ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	else
+	{
+		rectSrc.x   =   120    ;
+		rectSrc.y   =   40     ;
+		
+		rectDst.x   =   365    ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	
+	if(buttons->left == 1)
+	{
+		rectSrc.x   =   0      ;
+		rectSrc.y   =   0      ;
+		
+		rectDst.x   =   265    ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	else
+	{
+		rectSrc.x   =   0      ;
+		rectSrc.y   =   40     ;
+		
+		rectDst.x   =   265    ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+
+	if(buttons->pageUp == 1)
+	{		
+		rectSrc.x   =   160    ;
+		rectSrc.y   =   0      ;
+		
+		rectDst.x   =   265    ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	else
+	{
+		rectSrc.x   =   160    ;
+		rectSrc.y   =   40     ;
+		
+		rectDst.x   =   265    ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	
+	if(buttons->pageDown == 1)
+	{		
+		rectSrc.x   =   200    ;
+		rectSrc.y   =   0      ;
+		
+		rectDst.x   =   365    ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	else
+	{
+		rectSrc.x   =   200    ;
+		rectSrc.y   =   40     ;
+		
+		rectDst.x   =   365    ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+
+	if(buttons->W == 1)
+	{		
+		rectSrc.x   =   40     ;
+		rectSrc.y   =   80     ;
+		
+		rectDst.x   =   90     ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;		
+	}
+	else
+	{
+		rectSrc.x   =   40     ;
+		rectSrc.y   =   120    ;
+		
+		rectDst.x   =   90     ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	
+	if(buttons->S == 1)
+	{
+		rectSrc.x   =   80     ;
+		rectSrc.y   =   80     ;
+		
+		rectDst.x   =   90     ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;		
+	}
+	else
+	{
+		rectSrc.x   =   80     ;
+		rectSrc.y   =   120    ;
+		
+		rectDst.x   =   90     ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	
+	if(buttons->A == 1)
+	{
+		rectSrc.x   =   0      ;
+		rectSrc.y   =   80     ;
+
+		rectDst.x   =    40    ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	else
+	{
+		rectSrc.x   =   0      ;
+		rectSrc.y   =   120    ;
+
+		rectDst.x   =    40    ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	
+	if(buttons->D == 1)
+	{
+		rectSrc.x   =   120    ;
+		rectSrc.y   =   80     ;
+
+		rectDst.x   =   140    ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;		
+	}
+	else
+	{
+		rectSrc.x   =   120    ;
+		rectSrc.y   =   120    ;
+		
+		rectDst.x   =   140    ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	
+	if(buttons->Q == 1)
+	{
+		rectSrc.x   =   160    ;
+		rectSrc.y   =   80     ;
+		
+		rectDst.x   =   40     ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;		
+	}
+	else
+	{
+		rectSrc.x   =   160    ;
+		rectSrc.y   =   120    ;
+		
+		rectDst.x   =   40     ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	
+	if(buttons->E == 1)
+	{
+		rectSrc.x   =   200    ;
+		rectSrc.y   =   80     ;
+		
+		rectDst.x   =   140    ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;		
+	}
+	else
+	{
+		rectSrc.x   =   200    ;
+		rectSrc.y   =   120    ;
+		
+		rectDst.x   =   140    ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+
+	if(buttons->plus == 1)
+	{
+		rectSrc.x   =   240    ;
+		rectSrc.y   =   0      ;
+		
+		rectDst.x   =   500-20    ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	else
+	{
+		rectSrc.x   =   240    ;
+		rectSrc.y   =   40     ;
+		
+		rectDst.x   =   500-20    ;
+		rectDst.y   =   520    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	
+	if(buttons->minus == 1)
+	{
+		rectSrc.x   =   240    ;
+		rectSrc.y   =   80     ;
+		
+		rectDst.x   =   500-20    ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+	else
+	{
+		rectSrc.x   =   240    ;
+		rectSrc.y   =   120    ;
+		
+		rectDst.x   =   500-20    ;
+		rectDst.y   =   560    ;
+		
+		SDL_BlitSurface(bouttons, &rectSrc, affichage, &rectDst)     ;
+	}
+
+	return    ;
+}
+
+void  movementSoundEffect(Button* buttons)
+{
+	if(buttons->Q == 1 || buttons->S == 1 || buttons->D == 1 || buttons->A == 1 || buttons->W == 1  || buttons->E == 1)
+	{
+		Mix_Resume(1)    ;
+	}
+	else
+	{
+		Mix_Pause(1)     ;
+	}
+	
+	if(buttons->up == 1 || buttons->down == 1 || buttons->left == 1 || buttons->right == 1 || buttons->pageUp == 1 || buttons->pageDown == 1)
+	{
+		Mix_Resume(2)    ;
+	}
+	else
+	{
+		Mix_Pause(2)     ;
+	}
+	
+	if(buttons->plus == 1 || buttons->minus == 1)
+	{
+		Mix_Resume(3)    ;
+	}
+	else
+	{
+		Mix_Pause(3)     ;
+	}
+
+	if(buttons->F1 == 1)
+	{
+		Mix_PlayChannel(4 , sonF1 , 0)     ;
+	}
+
+	if(buttons->F2 == 1)
+	{
+		Mix_PlayChannel(4 , sonF2 , 0)     ;
+	}
+
+	if(buttons->F3 == 1)
+	{
+		Mix_PlayChannel(4 , sonF3 , 0)     ;
+	}
+
+	if(buttons->F4 == 1)
+	{
+		Mix_PlayChannel(4 , sonF4 , 0)     ;
+	}
+
+	if(buttons->F5 == 1)
+	{
+		Mix_PlayChannel(4 , sonF5 , 0)     ;
+	}
+
+	if(buttons->F6 == 1)
+	{
+		Mix_PlayChannel(4 , sonF6 , 0)     ;
+	}
+
+	if(buttons->F7 == 1)
+	{
+		Mix_PlayChannel(4 , sonF7 , 0)     ;
+	}
+
+	if(buttons->F8 == 1)
+	{
+		Mix_PlayChannel(4 , sonF8 , 0)     ;
+	}
+
+	if(buttons->F9 == 1)
+	{
+		Mix_PlayChannel(4 , sonF9 , 0)     ;
+	}
+
+	if(buttons->F10 == 1)
+	{
+		Mix_PlayChannel(4 , sonF10 , 0)     ;
+	}
+
+	if(buttons->F11 == 1)
+	{
+		Mix_PlayChannel(4 , sonF11 , 0)     ;
+	}
+
+	if(buttons->F12 == 1)
+	{
+		Mix_PlayChannel(4 , sonF12 , 0)     ;
+	}
+
+	return   ;
 }
 
 void   dessinerEtoiles(void)
@@ -795,33 +1167,48 @@ void    dessinerLignes(void)
 	}
 }
 
-void    dessinEnv2D(void)
+void    drawBackground(void)
 {
 	SDL_BlitSurface(arrierePlan, NULL, affichage, NULL)       ;
 	SDL_BlitSurface(message, NULL, affichage, NULL)           ;
 }
 
-static inline   void      setPixel(int  X , int  Y , Uint32  couleur)
+static inline void setPixel(int X, int Y, Uint32 couleur)
 {
-	 *((Uint32*)(affichage->pixels) + (affichage->w * Y) + X) = couleur   ;
-	 //printf("yoooo")   ;
+    // 1. Check boundaries (Note: use >= because 800 is out of bounds for an 800-wide array)
+    if (X < 0 || X >= RES_HORIZ || Y < 0 || Y >= RES_VERT) 
+    {
+        return; // Exit the function immediately. Do NOT draw, do NOT print.
+    }
+
+    // 2. If we reach here, it is safe to write to memory
+    Uint32* pixels = (Uint32*)affichage->pixels;
+    
+    // Use pitch/4 for absolute safety in 32-bit modes
+    pixels[(Y * (affichage->pitch / 4)) + X] = couleur;
 }
 
 static inline   Uint32    getPixel(int  X , int  Y , SDL_Surface*  image)
 {
-	 return    *((Uint32*)(image->pixels) + (image->w * Y) + X)    ;
-	 //printf("yoooo")   ;
+	if (Y < 0 || Y >= image->h || X < 0 || X >= image->w) return    0xFFFFFFFF   ;
+	return    *((Uint32*)(image->pixels) + (image->w * Y) + X)    ;
 }
 
 void   ligne(int x0, int y0, int x1, int y1 , Uint32  couleur)
 {
+	if(x0 == x1 && y0 == y1)
+	{
+		setPixel(x0, y0, couleur)   ;
+		return   ;
+	}
+	
 	int  ponte  =  (abs(y1 - y0) > abs(x1 - x0))   ; 
 	if (ponte)
 	{
 		swap(&x0, &y0)   ;
 		swap(&x1, &y1)   ;
 	}
-
+	
 	if (x0 > x1)
 	{
 		swap(&x0, &x1)   ;
@@ -925,7 +1312,7 @@ void   ligne(int x0, int y0, int x1, int y1 , Uint32  couleur)
 		}
 	}
 	
-
+	
 	if(y1 < 0)
 	{
 		int   erreur_tmp   =   erreur    ;
@@ -951,7 +1338,7 @@ void   ligne(int x0, int y0, int x1, int y1 , Uint32  couleur)
 	for(x = x0 ; x <= x1 ; x++)
 	{
 		if(ponte)
-		{
+		{			
 			setPixel(y,x,couleur)   ;
 		}
 		else
@@ -966,9 +1353,7 @@ void   ligne(int x0, int y0, int x1, int y1 , Uint32  couleur)
 			y       = y + pas_y        ;
 			erreur  = erreur + Dx      ;
 		}
-
 	}
-
 	return    ;
 }
 
@@ -980,7 +1365,6 @@ static inline   void   swap(int * a , int * b)
 
 	return   ;
 }
-
 
 SDL_Surface*     chargerImage(const char* file) 
 {
@@ -1027,7 +1411,7 @@ void    chargementFichirs()
 	
 	transl        =  Mix_LoadWAV("move.wav")               ;
 	rotation      =  Mix_LoadWAV("rotate.wav")             ;
-	echell        =  Mix_LoadWAV("zoom.wav")               ;
+	scale         =  Mix_LoadWAV("zoom.wav")               ;
 	
 	sonF1         =  Mix_LoadWAV("F1.wav")                 ;
 	sonF2         =  Mix_LoadWAV("F2.wav")                 ;
@@ -1099,7 +1483,7 @@ void    chargementFichirs()
 		test   =  11    ;
 	}
 	
-	if(echell == NULL)
+	if(scale == NULL)
 	{
 		test   =  12    ;
 	}
@@ -1187,6 +1571,11 @@ void    chargementFichirs()
 
 void    cleanUp()
 {
+	for(int i = 0; i < nbreOjectScene; i++)
+	{
+		free(allObjet[i])   ;
+	}	
+	
 	SDL_DestroySurface(arrierePlan)    ;
 	SDL_DestroySurface(message)        ;
 	SDL_DestroySurface(bouttons)       ;
@@ -1205,7 +1594,7 @@ void    cleanUp()
 	
 	Mix_FreeChunk(transl)           ;
 	Mix_FreeChunk(rotation)         ;
-	Mix_FreeChunk(echell)           ;
+	Mix_FreeChunk(scale)            ;
 	
 	Mix_FreeChunk(sonF1)            ;
 	Mix_FreeChunk(sonF2)            ;
@@ -1237,209 +1626,416 @@ void    cleanUp()
     SDL_Quit();
 }
 
-void    initialisation(Objet*  cube)
+void    loadCube(Objet*  cube)
 {
-	//////-------------------------------Le cube 3D------------------------------//////
+//////-------------------------------Le cube 3D------------------------------//////
 
-	int      i      ;
-	
-	Point points[8]   =  { {  500 ,  500 , -500 , 0 , 0 } , { -500 ,  500 , -500 , 0 , 0 } , { -500 , -500 , -500 , 0 , 0 } , 
+	Point points[8]   =      { {  500 ,  500 , -500 , 0 , 0 } , { -500 ,  500 , -500 , 0 , 0 } , { -500 , -500 , -500 , 0 , 0 } , 
                                {  500 , -500 , -500 , 0 , 0 } , {  500 ,  500 ,  500 , 0 , 0 } , { -500 ,  500 ,  500 , 0 , 0 } , 
                                { -500 , -500 ,  500 , 0 , 0 } , {  500 , -500 ,  500 , 0 , 0 } }    ;
 
 
-	Point normales[12]=  { {    0 ,    0 , -100 , 0 , 0 } , {    0 ,    0 , -100 , 0 , 0 } , {  100 ,    0 ,    0 , 0 , 0 } , 
+	Point normales[12]   =   { {    0 ,    0 , -100 , 0 , 0 } , {    0 ,    0 , -100 , 0 , 0 } , {  100 ,    0 ,    0 , 0 , 0 } , 
                                {  100 ,    0 ,    0 , 0 , 0 } , {    0 ,    0 ,  100 , 0 , 0 } , {    0 ,    0 ,  100 , 0 , 0 } , 
                                { -100 ,    0 ,    0 , 0 , 0 } , { -100 ,    0 ,    0 , 0 , 0 } , {    0 , -100 ,    0 , 0 , 0 } ,
                                {    0 , -100 ,    0 , 0 , 0 } , {    0 ,  100 ,    0 , 0 , 0 } , {    0 ,  100 ,    0 , 0 , 0 } }  ;
 	
 	
 	cube->nbrePts       =   8     ;
-	cube->centre.x      =   0     ;
-	cube->centre.y      =   0     ;
-	cube->centre.z      =   2000  ;
+	cube->center.x      =   0     ;
+	cube->center.y      =   0     ;
+	cube->center.z      =   0     ;
 
-	for(i = 0 ; i < cube->nbrePts ; i++)
+	for(int i = 0 ; i < cube->nbrePts ; i++)
 	{
-		cube->ptsOrg[i].x    =     points[i].x    ;
-		cube->ptsOrg[i].y    =     points[i].y    ;
-		cube->ptsOrg[i].z    =     points[i].z    ;
+		cube->ptsVsl[i].x    =    cube->ptsWrd[i].x   =    cube->ptsOrg[i].x    =    points[i].x    ;
+		cube->ptsVsl[i].y    =    cube->ptsWrd[i].y   =    cube->ptsOrg[i].y    =    points[i].y    ;
+		cube->ptsVsl[i].z    =    cube->ptsWrd[i].z   =    cube->ptsOrg[i].z    =    points[i].z    ;
 	}
 
-	for(i = 0 ; i < cube->nbrePts ; i++)
-	{
-		cube->points[i].x   =    cube->ptsOrg[i].x + cube->centre.x    ;
-		cube->points[i].y   =    cube->ptsOrg[i].y + cube->centre.y    ;
-		cube->points[i].z   =    cube->ptsOrg[i].z + cube->centre.z    ;
-	}
+	// for(int i = 0 ; i < cube->nbrePts ; i++)
+	// {
+	// 	cube->ptsWrd[i].x   =    cube->ptsOrg[i].x + cube->center.x    ;
+	// 	cube->ptsWrd[i].y   =    cube->ptsOrg[i].y + cube->center.y    ;
+	// 	cube->ptsWrd[i].z   =    cube->ptsOrg[i].z + cube->center.z    ;
+	// }
 
 	cube->nbreSegment       =   12                  ;
-	cube->segments[0][0]    =   &(cube->points[0])   ;
-	cube->segments[0][1]    =   &(cube->points[1])   ;
-	cube->segments[1][0]    =   &(cube->points[1])   ;
-	cube->segments[1][1]    =   &(cube->points[2])   ;
-	cube->segments[2][0]    =   &(cube->points[2])   ;
-	cube->segments[2][1]    =   &(cube->points[3])   ;
-	cube->segments[3][0]    =   &(cube->points[3])   ;
-	cube->segments[3][1]    =   &(cube->points[0])   ;
-	cube->segments[4][0]    =   &(cube->points[4])   ;
-	cube->segments[4][1]    =   &(cube->points[5])   ;
-	cube->segments[5][0]    =   &(cube->points[5])   ;
-	cube->segments[5][1]    =   &(cube->points[6])   ;
-	cube->segments[6][0]    =   &(cube->points[6])   ;
-	cube->segments[6][1]    =   &(cube->points[7])   ;
-	cube->segments[7][0]    =   &(cube->points[7])   ;
-	cube->segments[7][1]    =   &(cube->points[4])   ;
-	cube->segments[8][0]    =   &(cube->points[0])   ;
-	cube->segments[8][1]    =   &(cube->points[4])   ;
-	cube->segments[9][0]    =   &(cube->points[1])   ;
-	cube->segments[9][1]    =   &(cube->points[5])   ;
-	cube->segments[10][0]   =   &(cube->points[2])   ;
-	cube->segments[10][1]   =   &(cube->points[6])   ;
-	cube->segments[11][0]   =   &(cube->points[3])   ;
-	cube->segments[11][1]   =   &(cube->points[7])   ;
+	cube->segments[0][0]    =   &(cube->ptsVsl[0])   ;
+	cube->segments[0][1]    =   &(cube->ptsVsl[1])   ;
+	cube->segments[1][0]    =   &(cube->ptsVsl[1])   ;
+	cube->segments[1][1]    =   &(cube->ptsVsl[2])   ;
+	cube->segments[2][0]    =   &(cube->ptsVsl[2])   ;
+	cube->segments[2][1]    =   &(cube->ptsVsl[3])   ;
+	cube->segments[3][0]    =   &(cube->ptsVsl[3])   ;
+	cube->segments[3][1]    =   &(cube->ptsVsl[0])   ;
+	cube->segments[4][0]    =   &(cube->ptsVsl[4])   ;
+	cube->segments[4][1]    =   &(cube->ptsVsl[5])   ;
+	cube->segments[5][0]    =   &(cube->ptsVsl[5])   ;
+	cube->segments[5][1]    =   &(cube->ptsVsl[6])   ;
+	cube->segments[6][0]    =   &(cube->ptsVsl[6])   ;
+	cube->segments[6][1]    =   &(cube->ptsVsl[7])   ;
+	cube->segments[7][0]    =   &(cube->ptsVsl[7])   ;
+	cube->segments[7][1]    =   &(cube->ptsVsl[4])   ;
+	cube->segments[8][0]    =   &(cube->ptsVsl[0])   ;
+	cube->segments[8][1]    =   &(cube->ptsVsl[4])   ;
+	cube->segments[9][0]    =   &(cube->ptsVsl[1])   ;
+	cube->segments[9][1]    =   &(cube->ptsVsl[5])   ;
+	cube->segments[10][0]   =   &(cube->ptsVsl[2])   ;
+	cube->segments[10][1]   =   &(cube->ptsVsl[6])   ;
+	cube->segments[11][0]   =   &(cube->ptsVsl[3])   ;
+	cube->segments[11][1]   =   &(cube->ptsVsl[7])   ;
 
-	cube->nbreFace          =   12                   ;
-	cube->faces[0][0]       =   &(cube->points[0])   ;
-	cube->faces[0][1]       =   &(cube->points[2])   ;
-	cube->faces[0][2]       =   &(cube->points[1])   ;
-	cube->faces[1][0]       =   &(cube->points[0])   ;
-	cube->faces[1][1]       =   &(cube->points[3])   ;
-	cube->faces[1][2]       =   &(cube->points[2])   ;
-	cube->faces[2][0]       =   &(cube->points[0])   ;
-	cube->faces[2][1]       =   &(cube->points[4])   ;
-	cube->faces[2][2]       =   &(cube->points[3])   ;
-	cube->faces[3][0]       =   &(cube->points[3])   ;
-	cube->faces[3][1]       =   &(cube->points[4])   ;
-	cube->faces[3][2]       =   &(cube->points[7])   ;
-	cube->faces[4][0]       =   &(cube->points[7])   ;
-	cube->faces[4][1]       =   &(cube->points[4])   ;
-	cube->faces[4][2]       =   &(cube->points[5])   ;
-	cube->faces[5][0]       =   &(cube->points[5])   ;
-	cube->faces[5][1]       =   &(cube->points[6])   ;
-	cube->faces[5][2]       =   &(cube->points[7])   ;
-	cube->faces[6][0]       =   &(cube->points[6])   ;
-	cube->faces[6][1]       =   &(cube->points[5])   ;
-	cube->faces[6][2]       =   &(cube->points[1])   ;
-	cube->faces[7][0]       =   &(cube->points[1])   ;
-	cube->faces[7][1]       =   &(cube->points[2])   ;
-	cube->faces[7][2]       =   &(cube->points[6])   ;
-	cube->faces[8][0]       =   &(cube->points[2])   ;
-	cube->faces[8][1]       =   &(cube->points[3])   ;
-	cube->faces[8][2]       =   &(cube->points[6])   ;
-	cube->faces[9][0]       =   &(cube->points[3])   ;
-	cube->faces[9][1]       =   &(cube->points[7])   ;
-	cube->faces[9][2]       =   &(cube->points[6])   ;
-	cube->faces[10][0]      =   &(cube->points[1])   ;
-	cube->faces[10][1]      =   &(cube->points[5])   ;
-	cube->faces[10][2]      =   &(cube->points[4])   ;
-	cube->faces[11][0]      =   &(cube->points[0])   ;
-	cube->faces[11][1]      =   &(cube->points[1])   ;
-	cube->faces[11][2]      =   &(cube->points[4])   ;
+	cube->nbreFace                   =   12                   ;
+	cube->faces[0].vertices[0]       =   &(cube->ptsVsl[0])   ;
+	cube->faces[0].vertices[1]       =   &(cube->ptsVsl[2])   ;
+	cube->faces[0].vertices[2]       =   &(cube->ptsVsl[1])   ;
+	cube->faces[1].vertices[0]       =   &(cube->ptsVsl[0])   ;
+	cube->faces[1].vertices[1]       =   &(cube->ptsVsl[3])   ;
+	cube->faces[1].vertices[2]       =   &(cube->ptsVsl[2])   ;
+	cube->faces[2].vertices[0]       =   &(cube->ptsVsl[0])   ;
+	cube->faces[2].vertices[1]       =   &(cube->ptsVsl[4])   ;
+	cube->faces[2].vertices[2]       =   &(cube->ptsVsl[3])   ;
+	cube->faces[3].vertices[0]       =   &(cube->ptsVsl[3])   ;
+	cube->faces[3].vertices[1]       =   &(cube->ptsVsl[4])   ;
+	cube->faces[3].vertices[2]       =   &(cube->ptsVsl[7])   ;
+	cube->faces[4].vertices[0]       =   &(cube->ptsVsl[7])   ;
+	cube->faces[4].vertices[1]       =   &(cube->ptsVsl[4])   ;
+	cube->faces[4].vertices[2]       =   &(cube->ptsVsl[5])   ;
+	cube->faces[5].vertices[0]       =   &(cube->ptsVsl[5])   ;
+	cube->faces[5].vertices[1]       =   &(cube->ptsVsl[6])   ;
+	cube->faces[5].vertices[2]       =   &(cube->ptsVsl[7])   ;
+	cube->faces[6].vertices[0]       =   &(cube->ptsVsl[6])   ;
+	cube->faces[6].vertices[1]       =   &(cube->ptsVsl[5])   ;
+	cube->faces[6].vertices[2]       =   &(cube->ptsVsl[1])   ;
+	cube->faces[7].vertices[0]       =   &(cube->ptsVsl[1])   ;
+	cube->faces[7].vertices[1]       =   &(cube->ptsVsl[2])   ;
+	cube->faces[7].vertices[2]       =   &(cube->ptsVsl[6])   ;
+	cube->faces[8].vertices[0]       =   &(cube->ptsVsl[2])   ;
+	cube->faces[8].vertices[1]       =   &(cube->ptsVsl[3])   ;
+	cube->faces[8].vertices[2]       =   &(cube->ptsVsl[6])   ;
+	cube->faces[9].vertices[0]       =   &(cube->ptsVsl[3])   ;
+	cube->faces[9].vertices[1]       =   &(cube->ptsVsl[7])   ;
+	cube->faces[9].vertices[2]       =   &(cube->ptsVsl[6])   ;
+	cube->faces[10].vertices[0]      =   &(cube->ptsVsl[1])   ;
+	cube->faces[10].vertices[1]      =   &(cube->ptsVsl[5])   ;
+	cube->faces[10].vertices[2]      =   &(cube->ptsVsl[4])   ;
+	cube->faces[11].vertices[0]      =   &(cube->ptsVsl[0])   ;
+	cube->faces[11].vertices[1]      =   &(cube->ptsVsl[1])   ;
+	cube->faces[11].vertices[2]      =   &(cube->ptsVsl[4])   ;
 
-
-	for(i = 0 ; i < cube->nbreFace ; i++)
+	for(int  i = 0 ; i < cube->nbreFace ; i++)
 	{
-		cube->normale[i].x    =    cube->nrmOrg[i].x    =     normales[i].x    ;
-		cube->normale[i].y    =    cube->nrmOrg[i].y    =     normales[i].y    ;
-		cube->normale[i].z    =    cube->nrmOrg[i].z    =     normales[i].z    ;
+		cube->faces[i].nrmVsl.x    =    cube->faces[i].nrmWrd.x    =    cube->faces[i].nrmOrg.x    =     normales[i].x    ;
+		cube->faces[i].nrmVsl.y    =    cube->faces[i].nrmWrd.y    =    cube->faces[i].nrmOrg.y    =     normales[i].y    ;
+		cube->faces[i].nrmVsl.z    =    cube->faces[i].nrmWrd.z    =    cube->faces[i].nrmOrg.z    =     normales[i].z    ;	
 	}
 
-	for(i = 0 ; i < cube->nbreFace ; i++)
-	{
-		cube->faces[i][3]   =    &(cube->normale[i])    ;
-	}
-
-	cube->faceTxtr[0][0][0]     =    255 + 181  ;
-	cube->faceTxtr[0][0][1]     =    511 + 181  ;
-	cube->faceTxtr[0][1][0]     =      0 + 181  ;
-	cube->faceTxtr[0][1][1]     =    255 + 181  ;
-	cube->faceTxtr[0][2][0]     =      0 + 181  ;
-	cube->faceTxtr[0][2][1]     =    511 + 181  ;
-	cube->faceTxtr[1][0][0]     =    255 + 181  ;
-	cube->faceTxtr[1][0][1]     =    511 + 181  ;
-	cube->faceTxtr[1][1][0]     =    255 + 181  ;
-	cube->faceTxtr[1][1][1]     =    255 + 181  ;
-	cube->faceTxtr[1][2][0]     =      0 + 181  ;
-	cube->faceTxtr[1][2][1]     =    255 + 181  ;
-	cube->faceTxtr[2][0][0]     =    255 + 181  ;
-	cube->faceTxtr[2][0][1]     =    511 + 181  ;
-	cube->faceTxtr[2][1][0]     =    511 + 181  ;
-	cube->faceTxtr[2][1][1]     =    511 + 181  ;
-	cube->faceTxtr[2][2][0]     =    255 + 181  ;
-	cube->faceTxtr[2][2][1]     =    255 + 181  ;
-	cube->faceTxtr[3][0][0]     =    255 + 181  ;
-	cube->faceTxtr[3][0][1]     =    255 + 181  ;
-	cube->faceTxtr[3][1][0]     =    511 + 181  ;
-	cube->faceTxtr[3][1][1]     =    511 + 181  ;
-	cube->faceTxtr[3][2][0]     =    511 + 181  ;
-	cube->faceTxtr[3][2][1]     =    255 + 181  ;
-	cube->faceTxtr[4][0][0]     =    511 + 181  ;
-	cube->faceTxtr[4][0][1]     =    255 + 181  ;
-	cube->faceTxtr[4][1][0]     =    511 + 181  ;
-	cube->faceTxtr[4][1][1]     =    511 + 181  ;
-	cube->faceTxtr[4][2][0]     =    767 + 181  ;
-	cube->faceTxtr[4][2][1]     =    511 + 181  ;
-	cube->faceTxtr[5][0][0]     =    767 + 181  ;
-	cube->faceTxtr[5][0][1]     =    511 + 181  ;
-	cube->faceTxtr[5][1][0]     =    767 + 181  ;
-	cube->faceTxtr[5][1][1]     =    255 + 181  ;
-	cube->faceTxtr[5][2][0]     =    511 + 181  ;
-	cube->faceTxtr[5][2][1]     =    255 + 181  ;
-	cube->faceTxtr[6][0][0]     =    767 + 181  ;
-	cube->faceTxtr[6][0][1]     =    255 + 181  ;
-	cube->faceTxtr[6][1][0]     =    767 + 181  ;
-	cube->faceTxtr[6][1][1]     =    511 + 181  ;
-	cube->faceTxtr[6][2][0]     =   1023 + 181  ;
-	cube->faceTxtr[6][2][1]     =    511 + 181  ;
-	cube->faceTxtr[7][0][0]     =   1023 + 181  ;
-	cube->faceTxtr[7][0][1]     =    511 + 181  ;
-	cube->faceTxtr[7][1][0]     =   1023 + 181  ;
-	cube->faceTxtr[7][1][1]     =    255 + 181  ;
-	cube->faceTxtr[7][2][0]     =    767 + 181  ;
-	cube->faceTxtr[7][2][1]     =    255 + 181  ;
-	cube->faceTxtr[8][0][0]     =      0 + 181  ;
-	cube->faceTxtr[8][0][1]     =    255 + 181  ;
-	cube->faceTxtr[8][1][0]     =    255 + 181  ;
-	cube->faceTxtr[8][1][1]     =    255 + 181  ;
-	cube->faceTxtr[8][2][0]     =      0 + 181  ;
-	cube->faceTxtr[8][2][1]     =      0 + 181  ;
-	cube->faceTxtr[9][0][0]     =    255 + 181  ;
-	cube->faceTxtr[9][0][1]     =    255 + 181  ;
-	cube->faceTxtr[9][1][0]     =    255 + 181  ;
-	cube->faceTxtr[9][1][1]     =      0 + 181  ;
-	cube->faceTxtr[9][2][0]     =      0 + 181  ;
-	cube->faceTxtr[9][2][1]     =      0 + 181  ;
-	cube->faceTxtr[10][0][0]    =      0 + 181  ;
-	cube->faceTxtr[10][0][1]    =    511 + 181  ;
-	cube->faceTxtr[10][1][0]    =      0 + 181  ;
-	cube->faceTxtr[10][1][1]    =    767 + 181  ;
-	cube->faceTxtr[10][2][0]    =    255 + 181  ;
-	cube->faceTxtr[10][2][1]    =    767 + 181  ;
-	cube->faceTxtr[11][0][0]    =    255 + 181  ;
-	cube->faceTxtr[11][0][1]    =    511 + 181  ;
-	cube->faceTxtr[11][1][0]    =      0 + 181  ;
-	cube->faceTxtr[11][1][1]    =    511 + 181  ;
-	cube->faceTxtr[11][2][0]    =    255 + 181  ;
-	cube->faceTxtr[11][2][1]    =    767 + 181  ;
+	cube->faces[0].uv[0][0]     =    255 + 181  ;
+	cube->faces[0].uv[0][1]     =    511 + 181  ;
+	cube->faces[0].uv[1][0]     =      0 + 181  ;
+	cube->faces[0].uv[1][1]     =    255 + 181  ;
+	cube->faces[0].uv[2][0]     =      0 + 181  ;
+	cube->faces[0].uv[2][1]     =    511 + 181  ;
+	cube->faces[1].uv[0][0]     =    255 + 181  ;
+	cube->faces[1].uv[0][1]     =    511 + 181  ;
+	cube->faces[1].uv[1][0]     =    255 + 181  ;
+	cube->faces[1].uv[1][1]     =    255 + 181  ;
+	cube->faces[1].uv[2][0]     =      0 + 181  ;
+	cube->faces[1].uv[2][1]     =    255 + 181  ;
+	cube->faces[2].uv[0][0]     =    255 + 181  ;
+	cube->faces[2].uv[0][1]     =    511 + 181  ;
+	cube->faces[2].uv[1][0]     =    511 + 181  ;
+	cube->faces[2].uv[1][1]     =    511 + 181  ;
+	cube->faces[2].uv[2][0]     =    255 + 181  ;
+	cube->faces[2].uv[2][1]     =    255 + 181  ;
+	cube->faces[3].uv[0][0]     =    255 + 181  ;
+	cube->faces[3].uv[0][1]     =    255 + 181  ;
+	cube->faces[3].uv[1][0]     =    511 + 181  ;
+	cube->faces[3].uv[1][1]     =    511 + 181  ;
+	cube->faces[3].uv[2][0]     =    511 + 181  ;
+	cube->faces[3].uv[2][1]     =    255 + 181  ;
+	cube->faces[4].uv[0][0]     =    511 + 181  ;
+	cube->faces[4].uv[0][1]     =    255 + 181  ;
+	cube->faces[4].uv[1][0]     =    511 + 181  ;
+	cube->faces[4].uv[1][1]     =    511 + 181  ;
+	cube->faces[4].uv[2][0]     =    767 + 181  ;
+	cube->faces[4].uv[2][1]     =    511 + 181  ;
+	cube->faces[5].uv[0][0]     =    767 + 181  ;
+	cube->faces[5].uv[0][1]     =    511 + 181  ;
+	cube->faces[5].uv[1][0]     =    767 + 181  ;
+	cube->faces[5].uv[1][1]     =    255 + 181  ;
+	cube->faces[5].uv[2][0]     =    511 + 181  ;
+	cube->faces[5].uv[2][1]     =    255 + 181  ;
+	cube->faces[6].uv[0][0]     =    767 + 181  ;
+	cube->faces[6].uv[0][1]     =    255 + 181  ;
+	cube->faces[6].uv[1][0]     =    767 + 181  ;
+	cube->faces[6].uv[1][1]     =    511 + 181  ;
+	cube->faces[6].uv[2][0]     =   1023 + 181  ;
+	cube->faces[6].uv[2][1]     =    511 + 181  ;
+	cube->faces[7].uv[0][0]     =   1023 + 181  ;
+	cube->faces[7].uv[0][1]     =    511 + 181  ;
+	cube->faces[7].uv[1][0]     =   1023 + 181  ;
+	cube->faces[7].uv[1][1]     =    255 + 181  ;
+	cube->faces[7].uv[2][0]     =    767 + 181  ;
+	cube->faces[7].uv[2][1]     =    255 + 181  ;
+	cube->faces[8].uv[0][0]     =      0 + 181  ;
+	cube->faces[8].uv[0][1]     =    255 + 181  ;
+	cube->faces[8].uv[1][0]     =    255 + 181  ;
+	cube->faces[8].uv[1][1]     =    255 + 181  ;
+	cube->faces[8].uv[2][0]     =      0 + 181  ;
+	cube->faces[8].uv[2][1]     =      0 + 181  ;
+	cube->faces[9].uv[0][0]     =    255 + 181  ;
+	cube->faces[9].uv[0][1]     =    255 + 181  ;
+	cube->faces[9].uv[1][0]     =    255 + 181  ;
+	cube->faces[9].uv[1][1]     =      0 + 181  ;
+	cube->faces[9].uv[2][0]     =      0 + 181  ;
+	cube->faces[9].uv[2][1]     =      0 + 181  ;
+	cube->faces[10].uv[0][0]    =      0 + 181  ;
+	cube->faces[10].uv[0][1]    =    511 + 181  ;
+	cube->faces[10].uv[1][0]    =      0 + 181  ;
+	cube->faces[10].uv[1][1]    =    767 + 181  ;
+	cube->faces[10].uv[2][0]    =    255 + 181  ;
+	cube->faces[10].uv[2][1]    =    767 + 181  ;
+	cube->faces[11].uv[0][0]    =    255 + 181  ;
+	cube->faces[11].uv[0][1]    =    511 + 181  ;
+	cube->faces[11].uv[1][0]    =      0 + 181  ;
+	cube->faces[11].uv[1][1]    =    511 + 181  ;
+	cube->faces[11].uv[2][0]    =    255 + 181  ;
+	cube->faces[11].uv[2][1]    =    767 + 181  ;
 	
 	cube->angleX     =   0.0        ;
 	cube->angleY     =   0.0        ;
 	cube->angleZ     =   0.0        ;
-	cube->echell     =   0.6        ;
+	cube->scale      =   0.6        ;
+
+	cube->texture   =  chargerImage("texture.png")       ;
+
+	for(int i = 0 ; i < cube->nbreFace ; i++)
+	{
+		cube->faces[i].texture  =  cube->texture     ;
+		cube->faces[i].owner    =  cube              ;
+	}
+
+	cube->orgSphrCent.x   =   0   ;
+	cube->orgSphrCent.y   =   0   ;	
+	cube->orgSphrCent.z   =   0   ;
+
+	cube->radius   =  (int)sqrt(500*500 + 500*500 + 500*500)   ;
+
+	cube->	isVisible   =   false   ;
+
+	return   ;
+}
+int max_faces = 0 ;
+void  addObjectToScene(Objet*  objet)
+{
+	for(int  i = 0 ; i < objet->nbreFace ; i++)
+	{
+		facesQueue[nbreFaceScene]    =    &objet->faces[i]    ;
+		//printf("x=%d, y=%d, z=%d\n", facesQueue[nbreFaceScene]->vertices[0]->x, facesQueue[nbreFaceScene]->vertices[0]->y, facesQueue[nbreFaceScene]->vertices[0]->z)  ;
+		nbreFaceScene++    ;		
+	}
+	//printf("Object removed from the scene with a number of faces = %d, the total number of faces = %d\n", objet->nbreFace, nbreFaceScene) ;
+
+	return    ;
+}
+
+void  removeObjectFromScene(Objet*  objet)
+{
+	for(int  i = 0 ; i < nbreFaceScene ; i++)
+	{
+		if(facesQueue[i]->owner == objet)
+		{
+			facesQueue[i--]    =   facesQueue[nbreFaceScene-1]    ;
+			nbreFaceScene--    ;
+			//printf("x=%d, y=%d, z=%d\n", facesQueue[nbreFaceScene]->vertices[0]->x, facesQueue[nbreFaceScene]->vertices[0]->y, facesQueue[nbreFaceScene]->vertices[0]->z)  ;
+		}	
+	}
+	//printf("Object removed from the scene with a number of faces = %d, the total number of faces = %d\n", objet->nbreFace, nbreFaceScene) ;
+	
+	return    ;
+}
+
+void    initialisation(void)
+{
+	///-----------------------------3D objects initialization and scene loading--------------------------------//////
+	
+	Objet*    raziel    =  malloc(sizeof(Objet))  ;
+	Objet*    dino      =  malloc(sizeof(Objet))  ;
+	//Objet*    kratos    =  malloc(sizeof(Objet))  ;
+	Objet*    cube      =  malloc(sizeof(Objet))  ;
+	Objet*    heihachi  =  malloc(sizeof(Objet))  ;
+
+	Objet*    room00    =  malloc(sizeof(Objet))  ;
+	Objet*    room01    =  malloc(sizeof(Objet))  ;
+	Objet*    room02    =  malloc(sizeof(Objet))  ;
+	Objet*    room03    =  malloc(sizeof(Objet))  ;
+	Objet*    room04    =  malloc(sizeof(Objet))  ;
+	Objet*    room05    =  malloc(sizeof(Objet))  ;
+	Objet*    room06    =  malloc(sizeof(Objet))  ;
+	Objet*    room07    =  malloc(sizeof(Objet))  ;
+	Objet*    room08    =  malloc(sizeof(Objet))  ;
+	Objet*    room09    =  malloc(sizeof(Objet))  ;
+	Objet*    room10    =  malloc(sizeof(Objet))  ;
+	Objet*    room11    =  malloc(sizeof(Objet))  ;
+	Objet*    room12    =  malloc(sizeof(Objet))  ;
+	Objet*    room13    =  malloc(sizeof(Objet))  ;
+	Objet*    room14    =  malloc(sizeof(Objet))  ;
+	Objet*    room15    =  malloc(sizeof(Objet))  ;
+	Objet*    room16    =  malloc(sizeof(Objet))  ;
+	Objet*    room17    =  malloc(sizeof(Objet))  ;
+	Objet*    room18    =  malloc(sizeof(Objet))  ;
+	Objet*    room19    =  malloc(sizeof(Objet))  ;
+	Objet*    room20    =  malloc(sizeof(Objet))  ;
+	Objet*    room21    =  malloc(sizeof(Objet))  ;
+	Objet*    room22    =  malloc(sizeof(Objet))  ;
+	Objet*    room23    =  malloc(sizeof(Objet))  ;
+	Objet*    room24    =  malloc(sizeof(Objet))  ;
+	Objet*    room25    =  malloc(sizeof(Objet))  ;
+	Objet*    room26    =  malloc(sizeof(Objet))  ;
+	Objet*    room27    =  malloc(sizeof(Objet))  ;
+	Objet*    room28    =  malloc(sizeof(Objet))  ;
+	Objet*    room29    =  malloc(sizeof(Objet))  ;
+	Objet*    room30    =  malloc(sizeof(Objet))  ;
+	Objet*    room31    =  malloc(sizeof(Objet))  ;
+	Objet*    room32    =  malloc(sizeof(Objet))  ;
+	Objet*    room33    =  malloc(sizeof(Objet))  ;
+	Objet*    room34    =  malloc(sizeof(Objet))  ;
+	Objet*    room35    =  malloc(sizeof(Objet))  ;
+	Objet*    room36    =  malloc(sizeof(Objet))  ;
+	Objet*    room37    =  malloc(sizeof(Objet))  ;
+	Objet*    room38    =  malloc(sizeof(Objet))  ;
+	Objet*    room39    =  malloc(sizeof(Objet))  ;
+	Objet*    room40    =  malloc(sizeof(Objet))  ;
+
+	//controlledPlayer =  room00   ;
+	
+	loadCube(cube)              ;
+	loadOBJfile("Raziel/Raziel.obj", raziel)                ;	
+	loadOBJfile("assets/dino/dino.obj", dino)               ;
+	//loadOBJfile("assets/kratos/kratos.obj", kratos)         ;	
+	loadOBJfile("assets/TR1-level1/room00.obj", room00)     ;
+	loadOBJfile("assets/TR1-level1/room01.obj", room01)     ;
+	loadOBJfile("assets/TR1-level1/room02.obj", room02)     ;
+	loadOBJfile("assets/TR1-level1/room03.obj", room03)     ;
+	loadOBJfile("assets/TR1-level1/room04.obj", room04)     ;
+	loadOBJfile("assets/TR1-level1/room05.obj", room05)     ;
+	loadOBJfile("assets/TR1-level1/room06.obj", room06)     ;
+	loadOBJfile("assets/TR1-level1/room07.obj", room07)     ;
+	loadOBJfile("assets/TR1-level1/room08.obj", room08)     ;
+	loadOBJfile("assets/TR1-level1/room09.obj", room09)     ;
+	loadOBJfile("assets/TR1-level1/room10.obj", room10)     ;
+	loadOBJfile("assets/TR1-level1/room11.obj", room11)     ;
+	loadOBJfile("assets/TR1-level1/room12.obj", room12)     ;
+	loadOBJfile("assets/TR1-level1/room13.obj", room13)     ;
+	loadOBJfile("assets/TR1-level1/room14.obj", room14)     ;
+	loadOBJfile("assets/TR1-level1/room15.obj", room15)     ;
+	loadOBJfile("assets/TR1-level1/room16.obj", room16)     ;
+	loadOBJfile("assets/TR1-level1/room17.obj", room17)     ;
+	loadOBJfile("assets/TR1-level1/room18.obj", room18)     ;
+	loadOBJfile("assets/TR1-level1/room19.obj", room19)     ;
+	loadOBJfile("assets/TR1-level1/room20.obj", room20)     ;
+	loadOBJfile("assets/TR1-level1/room21.obj", room21)     ;
+	loadOBJfile("assets/TR1-level1/room22.obj", room22)     ;
+	loadOBJfile("assets/TR1-level1/room23.obj", room23)     ;
+	loadOBJfile("assets/TR1-level1/room24.obj", room24)     ;
+	loadOBJfile("assets/TR1-level1/room25.obj", room25)     ;
+	loadOBJfile("assets/TR1-level1/room26.obj", room26)     ;
+	loadOBJfile("assets/TR1-level1/room27.obj", room27)     ;
+	loadOBJfile("assets/TR1-level1/room28.obj", room28)     ;
+	loadOBJfile("assets/TR1-level1/room29.obj", room29)     ;	
+	loadOBJfile("assets/TR1-level1/room30.obj", room30)     ;
+	loadOBJfile("assets/TR1-level1/room31.obj", room31)     ;
+	loadOBJfile("assets/TR1-level1/room32.obj", room32)     ;
+	loadOBJfile("assets/TR1-level1/room33.obj", room33)     ;
+	loadOBJfile("assets/TR1-level1/room34.obj", room34)     ;
+	loadOBJfile("assets/TR1-level1/room35.obj", room35)     ;
+	loadOBJfile("assets/TR1-level1/room36.obj", room36)     ;
+	loadOBJfile("assets/TR1-level1/room37.obj", room37)     ;
+	loadOBJfile("assets/TR1-level1/room38.obj", room38)     ;
+	loadOBJfile("assets/TR1-level1/room39.obj", room39)     ;
+	loadOBJfile("assets/TR1-level1/room40.obj", room40)     ;
+
+	allObjet[0]   =   room00  ;
+	allObjet[1]   =   room01  ;
+	allObjet[2]   =   room02  ;
+	allObjet[3]   =   room03  ;
+	allObjet[4]   =   room04  ;
+	allObjet[5]   =   room05  ;
+	allObjet[6]   =   room06  ;
+	allObjet[7]   =   room07  ;
+	allObjet[8]   =   room08  ;
+	allObjet[9]   =   room09  ;
+	allObjet[10]  =   room10  ;
+	allObjet[11]  =   room11  ;
+	allObjet[12]  =   room12  ;
+	allObjet[13]  =   room13  ;
+	allObjet[14]  =   room14  ;
+	allObjet[15]  =   room15  ;
+	allObjet[16]  =   room16  ;
+	allObjet[17]  =   room17  ;
+	allObjet[18]  =   room18  ;
+	allObjet[19]  =   room19  ;	
+	allObjet[20]  =   room20  ;
+	allObjet[21]  =   room21  ;
+	allObjet[22]  =   room22  ;
+	allObjet[23]  =   room23  ;
+	allObjet[24]  =   room24  ;
+	allObjet[25]  =   room25  ;
+	allObjet[26]  =   room26  ;
+	allObjet[27]  =   room27  ;
+	allObjet[28]  =   room28  ;
+	allObjet[29]  =   room29  ;
+	allObjet[30]  =   room30  ;
+	allObjet[31]  =   room31  ;
+	allObjet[32]  =   room32  ;
+	allObjet[33]  =   room33  ;
+	allObjet[34]  =   room34  ;
+	allObjet[35]  =   room35  ;
+	allObjet[36]  =   room36  ;
+	allObjet[37]  =   room37  ;
+	allObjet[38]  =   room38  ;
+	allObjet[39]  =   room39  ;
+	allObjet[40]  =   room40  ;
+
+	allObjet[41]  =     cube  ;
+	allObjet[42]  =   raziel  ;
+	allObjet[43]  =    dino   ;
+	//allObjet[44]  =   kratos  ;
+
+	translation(cube, 340000, -10000, -280000)       ;
+	translation(raziel, 290000, -43000, -160000)     ;
+	translation(dino, 27000, 31000, 110000)          ;
+	//translation(kratos, 27000, 30000, 110000)        ;
+	localRotationScale(dino, PI, 0.0, 0.0, 1.0)      ;
+	localRotationScale(raziel, PI, 0.0, 0.0, 20.0)   ;
+	//localRotationScale(kratos, PI, 0.0, 0.0, 1.0)   ;
 
 
+	//allObjet[0]     =   kratos    ;
+
+	nbreOjectScene   =   44     ;	
+	
+	//////------------------------Camera Initialization ------------------------------//////
+
+	camera.posX   =    +340000    ;       // X you go right if it grows up
+	camera.posY   =     -10000    ;	    // Y is reversed, you go down if it grows up
+	camera.posZ   =    -560000    ;		// Z is going far ahead if it grows up
+
+	camera.angleY   =   0.0f        ;
+	camera.angleX   =   0.0f        ;
+	camera.angleZ   =   0.0f        ;	
+	
 	//////------------------------Chargement des fichiers et des bibliothèques--------------------------//////
 
 	initSDL()                 ;
 	
 	chargementFichirs()       ;
-	
-	cube->texture   =  chargerImage("texture.png")       ;
 
 	////------------------------------------------Dessin------------------------------------------/////
 
-	dessinEnv2D()   ;
+	drawBackground()   ;
 	
 	////------------------------------------------Musique------------------------------------------/////
 	
@@ -1454,7 +2050,7 @@ void    initialisation(Objet*  cube)
 	
 	Mix_PlayChannel(1 , transl , -1)    ;
 	Mix_PlayChannel(2 , rotation , -1)  ;
-	Mix_PlayChannel(3 , echell , -1)    ;
+	Mix_PlayChannel(3 , scale , -1)     ;
 	
 	Mix_Pause(1)     ;
 	Mix_Pause(2)     ;
@@ -1462,62 +2058,94 @@ void    initialisation(Objet*  cube)
 	
 }
 
-void    afficheObjetMesh(Objet*  cube)
+void    afficheObjetMesh(Objet*  mesh)
 {
 	int    i      ;
 
 	////--------------------------------projection---------------------------------//////
 
-	for(i = 0 ; i < cube->nbrePts ; i++)
+	for(i = 0 ; i < mesh->nbrePts ; i++)
 	{
-		cube->points[i].X  =  ((cube->points[i].x * DISTANCE) / cube->points[i].z) + (RES_HORIZ / 2)    ;	
-		cube->points[i].Y  =  ((cube->points[i].y * DISTANCE) / cube->points[i].z) + (RES_VERT  / 2)    ;		
+		if(mesh->ptsVsl[i].z != 0)
+		{	
+			mesh->ptsVsl[i].X  =  ((mesh->ptsVsl[i].x * DISTANCE_FOCAL) / mesh->ptsVsl[i].z) + (RES_HORIZ / 2)    ;	
+			mesh->ptsVsl[i].Y  =  ((mesh->ptsVsl[i].y * DISTANCE_FOCAL) / mesh->ptsVsl[i].z) + (RES_VERT  / 2)    ;				
+			// if(mesh->ptsVsl[i].X  < 0 || mesh->ptsVsl[i].X  >= RES_HORIZ || mesh->ptsVsl[i].Y  < 0 || mesh->ptsVsl[i].Y  >= RES_VERT)
+			// {
+			// 	printf("vertex :  %d, (X=%d, Y = %d)\n", i, mesh->ptsVsl[i].X, mesh->ptsVsl[i].Y)  ;
+			// }
+		}
 	}
+
 
 	////--------------------------dessin des mesh---------------------------------//////
 
-	for(i = 0 ; i < cube->nbreSegment ; i++)
+	for(i = 0 ; i < mesh->nbreSegment ; i++)
 	{		
-		ligne(cube->segments[i][0]->X , cube->segments[i][0]->Y , cube->segments[i][1]->X , cube->segments[i][1]->Y , SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;	
+		//printf("Segment = %i, (X1=%d, Y1=%d)-----(X2=%d, Y2=%d)\n", i,mesh->segments[i][0]->X, mesh->segments[i][0]->Y, mesh->segments[i][1]->X, mesh->segments[i][1]->Y)   ;
+		ligne(mesh->segments[i][0]->X , mesh->segments[i][0]->Y , mesh->segments[i][1]->X , mesh->segments[i][1]->Y , SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;
 	}
 
 	return   ;
 }
 
-void    afficheObjetTexture(Objet*  cube)
+void    displayScene()
 {
-	int    i , j , k    ;
+	int    j , k     ;
 
 	////--------------------------------projection---------------------------------//////
 
-	for(i = 0 ; i < cube->nbrePts ; i++)
+	for(int  objectCnt = 0 ; objectCnt < nbreOjectScene ; objectCnt++)
 	{
-		cube->points[i].X  =  ((cube->points[i].x * DISTANCE) / cube->points[i].z) + (RES_HORIZ / 2)    ;	
-		cube->points[i].Y  =  ((cube->points[i].y * DISTANCE) / cube->points[i].z) + (RES_VERT  / 2)    ;
+		// Frustum culling, then changing perspective of the object from absolute world to camera perspective
+		frustumCulling(allObjet[objectCnt])                 ;		
+		transformToCameraPerspective(allObjet[objectCnt])   ;		
+		
+		for(int  i = 0 ; i < allObjet[objectCnt]->nbrePts ; i++)
+		{
+			// The classic perspective formula: (3D_Coord(x or y) * Focal_Length / Depth(z)) + Screen_Offset
+			if(allObjet[objectCnt]->ptsVsl[i].z != 0)
+			{
+				allObjet[objectCnt]->ptsVsl[i].X  =  ((allObjet[objectCnt]->ptsVsl[i].x * DISTANCE_FOCAL) / allObjet[objectCnt]->ptsVsl[i].z) + (RES_HORIZ / 2)    ;	
+				allObjet[objectCnt]->ptsVsl[i].Y  =  ((allObjet[objectCnt]->ptsVsl[i].y * DISTANCE_FOCAL) / allObjet[objectCnt]->ptsVsl[i].z) + (RES_VERT  / 2)    ;
+				//printf("Object = %d | X = %d; Y = %d | x = %d, y = %d, z = %d, \n", objectCnt, allObjet[objectCnt]->ptsVsl[i].X , allObjet[objectCnt]->ptsVsl[i].Y , allObjet[objectCnt]->ptsVsl[i].x , allObjet[objectCnt]->ptsVsl[i].y , allObjet[objectCnt]->ptsVsl[i].z);
+			}
+		}
 	}
-
+	
+	////-------------------------- 2. DEPTH SORTING ---------------------------------//////
+	
+	// Sorts all faces from back-to-front so that near objects are drawn over far objects.	
+	painterAlgorithmSort()  ;
+	
 	////--------------------------dessin des faces---------------------------------//////
 
-	for(i = 0 ; i < cube->nbreFace ; i++)
+	// Main loop to process every face in the global scene list.
+	for(int i = 0 ; i < nbreFaceScene ; i++)
 	{		
-		if((((cube->faces[i][3]->x * (cube->faces[i][0]->X - (RES_HORIZ / 2))) + (cube->faces[i][3]->y * (cube->faces[i][0]->Y - (RES_VERT  / 2))) + (cube->faces[i][3]->z * DISTANCE)) < 0) && ((cube->faces[i][0]->X > 0) || (cube->faces[i][1]->X > 0) || (cube->faces[i][2]->X > 0)) && ((cube->faces[i][0]->X < (RES_HORIZ-1)) || (cube->faces[i][1]->X < (RES_HORIZ-1)) || (cube->faces[i][2]->X < (RES_HORIZ-1))) && ((cube->faces[i][0]->Y > 0) || (cube->faces[i][1]->Y > 0) || (cube->faces[i][2]->Y > 0)) && ((cube->faces[i][0]->Y < (RES_VERT-1)) || (cube->faces[i][1]->Y < (RES_VERT-1)) || (cube->faces[i][2]->Y < (RES_VERT-1))))
+		if((((facesQueue[i]->nrmVsl.x * (facesQueue[i]->vertices[0]->X - (RES_HORIZ / 2))) + (facesQueue[i]->nrmVsl.y * (facesQueue[i]->vertices[0]->Y - (RES_VERT  / 2))) + (facesQueue[i]->nrmVsl.z * DISTANCE_FOCAL)) < 0) // Back-Face Culling : using the dot-product Ux * Vx + Uy * Vy + Uz * Vz, if it is positif they are pointing to the same direction.
+		&& ((facesQueue[i]->vertices[0]->X > 0) || (facesQueue[i]->vertices[1]->X > 0) || (facesQueue[i]->vertices[2]->X > 0)) && ((facesQueue[i]->vertices[0]->X < (RES_HORIZ-1)) || (facesQueue[i]->vertices[1]->X < (RES_HORIZ-1)) || (facesQueue[i]->vertices[2]->X < (RES_HORIZ-1))) 
+		&& ((facesQueue[i]->vertices[0]->Y > 0) || (facesQueue[i]->vertices[1]->Y > 0) || (facesQueue[i]->vertices[2]->Y > 0)) && ((facesQueue[i]->vertices[0]->Y < (RES_VERT-1)) || (facesQueue[i]->vertices[1]->Y < (RES_VERT-1)) || (facesQueue[i]->vertices[2]->Y < (RES_VERT-1)))  // Checks if the triangle is at least partially within the screen boundaries.
+		&& ((facesQueue[i]->vertices[0]->z > DISTANCE_FOCAL)) && ((facesQueue[i]->vertices[1]->z > DISTANCE_FOCAL)) && ((facesQueue[i]->vertices[2]->z > DISTANCE_FOCAL))) // Checks if the triangle is too close or behind the camera
 		{	
+			//printf("face[%i] = (%d,%d,%d)(%d,%d)-(%d,%d,%d)(%d,%d)-(%d,%d,%d)(%d,%d)\n", i, facesQueue[i]->vertices[0]->x, facesQueue[i]->vertices[0]->y, facesQueue[i]->vertices[0]->z, facesQueue[i]->vertices[0]->X , facesQueue[i]->vertices[0]->Y , facesQueue[i]->vertices[1]->x, facesQueue[i]->vertices[1]->y, facesQueue[i]->vertices[1]->z, facesQueue[i]->vertices[1]->X , facesQueue[i]->vertices[1]->Y , facesQueue[i]->vertices[2]->x, facesQueue[i]->vertices[2]->y, facesQueue[i]->vertices[2]->z, facesQueue[i]->vertices[2]->X , facesQueue[i]->vertices[2]->Y )   ;
+			
 			int    haut   =   0      ;
 			int    bas , millieu     ;
 			int    baleillage , dis  ;
 			
-			
-			if(cube->faces[i][0]->Y > cube->faces[i][1]->Y)
+			// Identifies which vertex is the Top (haut), Middle (millieu), and Bottom (bas) of the triangle.
+			if(facesQueue[i]->vertices[0]->Y > facesQueue[i]->vertices[1]->Y)
 			{
 				haut   =   1   ;
 			}
 			
-			if(cube->faces[i][haut]->Y > cube->faces[i][2]->Y)
+			if(facesQueue[i]->vertices[haut]->Y > facesQueue[i]->vertices[2]->Y)
 			{
 				haut   =   2   ;
 			}
 			
-			if(cube->faces[i][(haut+1)%3]->Y > cube->faces[i][(haut+2)%3]->Y)
+			if(facesQueue[i]->vertices[(haut+1)%3]->Y > facesQueue[i]->vertices[(haut+2)%3]->Y)
 			{
 				millieu    =   (haut+2)%3   ;
 				bas        =   (haut+1)%3   ;
@@ -1532,12 +2160,12 @@ void    afficheObjetTexture(Objet*  cube)
 			
 			///////---------------------------------------------------------------//////////
 			
-			int    X0    =   cube->faces[i][haut]->X       ;
-			int    Y0    =   cube->faces[i][haut]->Y       ;
-			int    X1    =   cube->faces[i][millieu]->X    ;
-			int    Y1    =   cube->faces[i][millieu]->Y    ;
-			int    X2    =   cube->faces[i][bas]->X        ;
-			int    Y2    =   cube->faces[i][bas]->Y        ;
+			int    X0    =   facesQueue[i]->vertices[haut]->X       ;
+			int    Y0    =   facesQueue[i]->vertices[haut]->Y       ;
+			int    X1    =   facesQueue[i]->vertices[millieu]->X    ;
+			int    Y1    =   facesQueue[i]->vertices[millieu]->Y    ;
+			int    X2    =   facesQueue[i]->vertices[bas]->X        ;
+			int    Y2    =   facesQueue[i]->vertices[bas]->Y        ;
 			
 			int    Dx0  =  X1 - X0   ;
 			int    Dy0  =  Y1 - Y0   ;
@@ -1591,7 +2219,6 @@ void    afficheObjetTexture(Objet*  cube)
 					pas_L_1   =  pas_C_1 - 1   ;
 				}
 			}
-			
 			int    reste2    =     abs(Dx2) % Dy2 ;
 			int    erreur2   =     Dy2 / 2        ;
 			int    pas_C_2   =     Dx2 / Dy2      ;
@@ -1612,10 +2239,10 @@ void    afficheObjetTexture(Objet*  cube)
 			
 			///////---------------------------------------------------------------//////////
 			
-			int    XV0    =   cube->faceTxtr[i][haut][0]     ;
-			int    YV0    =   cube->faceTxtr[i][haut][1]     ;
-			int    XV1    =   cube->faceTxtr[i][bas][0]      ;
-			int    YV1    =   cube->faceTxtr[i][bas][1]      ;
+			int    XV0    =   facesQueue[i]->uv[haut][0]     ;
+			int    YV0    =   facesQueue[i]->uv[haut][1]     ;
+			int    XV1    =   facesQueue[i]->uv[bas][0]      ;
+			int    YV1    =   facesQueue[i]->uv[bas][1]      ;
 			
 			int    DVx   =   XV1 - XV0   ;
 			int    DVy   =   YV1 - YV0   ;
@@ -1633,7 +2260,7 @@ void    afficheObjetTexture(Objet*  cube)
 			}
 			else
 			{
-				DistVx   =  distVx - 1   ;
+				DistVx   =  distVx - 1   ;				
 			}
 			
 			int    resteVy    =     abs(DVy) % DV  ;
@@ -1657,8 +2284,8 @@ void    afficheObjetTexture(Objet*  cube)
 			
 			int    XH0    =   XV0 + ((Y1-Y0)*distVx) + ((XV0<XV1)?1:-1) * (((((Y1-Y0)*resteVx)-DV/2)/DV) + (((((Y1-Y0)*resteVx)-DV/2)%DV)>0))     ;
 			int    YH0    =   YV0 + ((Y1-Y0)*distVy) + ((YV0<YV1)?1:-1) * (((((Y1-Y0)*resteVy)-DV/2)/DV) + (((((Y1-Y0)*resteVy)-DV/2)%DV)>0))     ;
-			int    XH1    =   cube->faceTxtr[i][millieu][0]      ;
-			int    YH1    =   cube->faceTxtr[i][millieu][1]      ;
+			int    XH1    =   facesQueue[i]->uv[millieu][0]      ;
+			int    YH1    =   facesQueue[i]->uv[millieu][1]      ;
 			
 			int    DHx   =   XH1 - XH0   ;
 			int    DHy   =   YH1 - YH0   ;
@@ -1900,7 +2527,7 @@ void    afficheObjetTexture(Objet*  cube)
 					}
 				}
 				else
-				{
+				{   
 					if(X2 < 0)
 					{
 						if(Y0 == Y1)
@@ -2311,8 +2938,7 @@ void    afficheObjetTexture(Objet*  cube)
 						}
 					}
 				}
-			}
-			
+			}			
 			
 			if(X0 >= RES_HORIZ)
 			{
@@ -2990,8 +3616,8 @@ void    afficheObjetTexture(Objet*  cube)
 					if(baleillage == 1)
 					{
 						for(j = x3 ; j <= x4 ; j++)
-						{//	printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
-							setPixel(j , y ,getPixel(xH , yH , cube->texture))      ;
+						{//if (debug)  printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
+							setPixel(j , y ,getPixel(xH , yH , facesQueue[i]->texture))      ;
 							
 							erreurHx   -=  resteHx       ;
 							erreurHy   -=  resteHy       ;
@@ -3020,8 +3646,8 @@ void    afficheObjetTexture(Objet*  cube)
 					else
 					{
 						for(j = x3 ; j >= x4 ; j--)
-						{//	printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
-							setPixel(j , y ,getPixel(xH , yH , cube->texture))      ;
+						{//if (debug)  printf(" j=%i,y=%i,xH=%i,yH=%i\n" ,j,y,xH,yH)   ;
+							setPixel(j , y ,getPixel(xH , yH , facesQueue[i]->texture))      ;
 							
 							erreurHx   -=  resteHx       ;
 							erreurHy   -=  resteHy       ;
@@ -3100,10 +3726,22 @@ void    afficheObjetTexture(Objet*  cube)
 				}
 			}
 			
+			///////------ Excellent way to debug by highlighting the triangle in the 3D world----///////
+			
 			//ligne( X0 , Y0 , X1 , Y1 , SDL_MapRGB(affichage->format, 5 , 2 , 128))    ;
 			//ligne( X1 , Y1 , X2 , Y2 , SDL_MapRGB(affichage->format, 5 , 2 , 128))    ;
-			//ligne( X0 , Y0 , X2 , Y2 , SDL_MapRGB(affichage->format, 5 , 2 , 128))    ;
+			//ligne( X0 , Y0 , X2 , Y2 , SDL_MapRGB(affichage->format, 5 , 2 , 128))    ;	
+
+			//int i =  530  ;  //(SDL_GetTicks()/50) % allObjet[0]->nbreFace  ;
+			//for(int i = 0 ; i < 10 ; i++) 
+			// ligne(allObjet[0]->faces[i].vertices[0]->X , allObjet[0]->faces[i].vertices[0]->Y , allObjet[0]->faces[i].vertices[1]->X , allObjet[0]->faces[i].vertices[1]->Y , SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;
+			// ligne(allObjet[0]->faces[i].vertices[1]->X , allObjet[0]->faces[i].vertices[1]->Y , allObjet[0]->faces[i].vertices[2]->X , allObjet[0]->faces[i].vertices[2]->Y , SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;
+			// ligne(allObjet[0]->faces[i].vertices[2]->X , allObjet[0]->faces[i].vertices[2]->Y , allObjet[0]->faces[i].vertices[0]->X , allObjet[0]->faces[i].vertices[0]->Y , SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;
+			ligne(dbg1X, dbg1Y, dbg2X, dbg2Y, SDL_MapRGB(affichage->format, 5 , 200 , 128))    ;
+			// printf("normale = (%i, %i, %i)\n", allObjet[0]->faces[530].nrmVsl.x, allObjet[0]->faces[530].nrmVsl.y, allObjet[0]->faces[530].nrmVsl.z)   ;
+
 		}
+
 	}
 	
 	return   ;
@@ -3114,15 +3752,15 @@ static inline   void   triTableau(int tableau[][2] , int * position , int action
 {
 	int    i  =   *position   ;
 	
-	tableau[*position][0]   =   action     ;
-	tableau[*position][1]   =   y          ;
-	
-	while((tableau[i][1] < tableau[i-1][1]) && (i != 0))
+	while((i > 0) && (y < tableau[i-1][1]))
 	{
-		swap((int *)&tableau[i][0] , (int *)&tableau[i-1][0])   ;
-		swap((int *)&tableau[i][1] , (int *)&tableau[i-1][1])   ;
-		i--                                   ;
+		tableau[i][0] = tableau[i-1][0]   ;
+		tableau[i][1] = tableau[i-1][1]   ;
+		i--                               ;
 	}
+	
+	tableau[i][0]   =   action     ;
+	tableau[i][1]   =   y          ;
 	
 	(*position)++    ;
 	
@@ -3131,98 +3769,118 @@ static inline   void   triTableau(int tableau[][2] , int * position , int action
 
 static inline   void   delTableau(int tableau[][2] , int * taille , int action)
 {
-	int    i       ;
+	int    i , j      ;
 	
 	for(i = 0 ; i < (*taille) ; i++)
 	{
 		if(tableau[i][0] == action)
 		{
-			swap((int *)&tableau[i][0] , (int *)&tableau[i+1][0])   ;
-			swap((int *)&tableau[i][1] , (int *)&tableau[i+1][1])   ;
+			for(j = i ; j < (*taille)-1 ; j++)
+			{
+				tableau[j][0] = tableau[j+1][0]   ;
+				tableau[j][1] = tableau[j+1][1]   ;
+			}
+
+			(*taille)--    ;
+			return         ;
 		}
 	}
-	
-	if(tableau[i][0] == action)
-	{
-		tableau[i][0]   =   0     ;
-		tableau[i][1]   =   0     ;
-		(*taille)--               ;
-	}
-	return     ;
 }
 
 static inline  void    translation(Objet * objet , int Dx , int Dy , int Dz)
 {
 	int   i     ;
 	
-	objet->centre.x    +=   Dx     ;
-	objet->centre.y    +=   Dy     ;
-	objet->centre.z    +=   Dz     ;
+	objet->center.x    +=   Dx     ;
+	objet->center.y    +=   Dy     ;
+	objet->center.z    +=   Dz     ;
 	
 	for(i = 0 ; i < objet->nbrePts ; i++)
 	{
-		objet->points[i].x    +=  Dx     ;
-		objet->points[i].y    +=  Dy     ;
-		objet->points[i].z    +=  Dz     ;
+		objet->ptsWrd[i].x    +=  Dx     ;
+		objet->ptsWrd[i].y    +=  Dy     ;
+		objet->ptsWrd[i].z    +=  Dz     ;
 	}
+	
+	objet->wrdSphrCent.x   +=   Dx     ;
+	objet->wrdSphrCent.y   +=   Dy     ;
+	objet->wrdSphrCent.z   +=   Dz     ;
 	
 	return     ;
 }
 
-static inline  void    changementEchell_rotation(Objet * objet)
+static inline  void    localRotationScale(Objet * objet, float angleX, float angleY, float angleZ, float Scale)
 {
-	int    i  =  0      ;
+	objet->angleX   =   angleX     ;
+	objet->angleY   =   angleY     ;
+	objet->angleZ   =   angleZ     ;
+
+	objet->scale   =   Scale    ;
 	
 	////---------------------------------rotation--------------------------------------//////
 	
-	for(i = 0 ; i < objet->nbrePts ; i++)
+	for(int i = 0 ; i < objet->nbrePts ; i++)
 	{
 		
 		// par raport a l'axe Z
-		objet->points[i].x   =    (objet->ptsOrg[i].x * cos(objet->angleZ)) - (objet->ptsOrg[i].y * sin(objet->angleZ))  ;
-		objet->points[i].y   =    (objet->ptsOrg[i].x * sin(objet->angleZ)) + (objet->ptsOrg[i].y * cos(objet->angleZ))  ;
+		objet->ptsWrd[i].x   =    (objet->ptsOrg[i].x * cos(objet->angleZ)) - (objet->ptsOrg[i].y * sin(objet->angleZ))  ;
+		objet->ptsWrd[i].y   =    (objet->ptsOrg[i].x * sin(objet->angleZ)) + (objet->ptsOrg[i].y * cos(objet->angleZ))  ;
 		
 		// par raport a l'axe Y
-		objet->points[i].z   =    (objet->ptsOrg[i].z * cos(objet->angleY)) - (objet->points[i].x * sin(objet->angleY))   ;
-		objet->points[i].x   =    (objet->ptsOrg[i].z * sin(objet->angleY)) + (objet->points[i].x * cos(objet->angleY))   ;
+		objet->ptsWrd[i].z   =    (objet->ptsOrg[i].z * cos(objet->angleY)) - (objet->ptsWrd[i].x * sin(objet->angleY))   ;
+		objet->ptsWrd[i].x   =    (objet->ptsOrg[i].z * sin(objet->angleY)) + (objet->ptsWrd[i].x * cos(objet->angleY))   ;
 		
-		int    z   =  objet->points[i].z   ;
+		// z value save is mandatory, otherwire its value will be altered in the next instruction, and useless in the insrtuction after
+		int    z   =  objet->ptsWrd[i].z   ;  
 		
 		// par raport a l'axe X
-		objet->points[i].z   =    (objet->points[i].y * sin(objet->angleX)) + (z * cos(objet->angleX))   ;
-		objet->points[i].y   =    (objet->points[i].y * cos(objet->angleX)) - (z * sin(objet->angleX))   ;
-		
+		objet->ptsWrd[i].z   =    (objet->ptsWrd[i].y * sin(objet->angleX)) + (z * cos(objet->angleX))   ;
+		objet->ptsWrd[i].y   =    (objet->ptsWrd[i].y * cos(objet->angleX)) - (z * sin(objet->angleX))   ;		
 	}
 	
-	for(i = 0 ; i < objet->nbreFace ; i++)
+	// rotation of the sphere center
+	objet->wrdSphrCent.x   =    (objet->orgSphrCent.x * cos(objet->angleZ)) - (objet->orgSphrCent.y * sin(objet->angleZ))  ;
+	objet->wrdSphrCent.y   =    (objet->orgSphrCent.x * sin(objet->angleZ)) + (objet->orgSphrCent.y * cos(objet->angleZ))  ;
+	
+	objet->wrdSphrCent.z   =    (objet->orgSphrCent.z * cos(objet->angleY)) - (objet->wrdSphrCent.x * sin(objet->angleY))   ;
+	objet->wrdSphrCent.x   =    (objet->orgSphrCent.z * sin(objet->angleY)) + (objet->wrdSphrCent.x * cos(objet->angleY))   ;
+		
+	int    z   =  objet->wrdSphrCent.z   ; 	
+	objet->wrdSphrCent.z   =    (objet->wrdSphrCent.y * sin(objet->angleX)) + (z * cos(objet->angleX))   ;
+	objet->wrdSphrCent.y   =    (objet->wrdSphrCent.y * cos(objet->angleX)) - (z * sin(objet->angleX))   ;
+	
+	for(int i = 0 ; i < objet->nbreFace ; i++)
 	{
 		
 		// par raport a l'axe Z
-		objet->normale[i].x   =    (objet->nrmOrg[i].x * cos(objet->angleZ)) - (objet->nrmOrg[i].y * sin(objet->angleZ))  ;
-		objet->normale[i].y   =    (objet->nrmOrg[i].x * sin(objet->angleZ)) + (objet->nrmOrg[i].y * cos(objet->angleZ))  ;
+		objet->faces[i].nrmWrd.x   =    (objet->faces[i].nrmOrg.x * cos(objet->angleZ)) - (objet->faces[i].nrmOrg.y * sin(objet->angleZ))  ;
+		objet->faces[i].nrmWrd.y   =    (objet->faces[i].nrmOrg.x * sin(objet->angleZ)) + (objet->faces[i].nrmOrg.y * cos(objet->angleZ))  ;
 		
 		// par raport a l'axe Y
-		objet->normale[i].z   =    (objet->nrmOrg[i].z * cos(objet->angleY)) - (objet->normale[i].x * sin(objet->angleY))   ;
-		objet->normale[i].x   =    (objet->nrmOrg[i].z * sin(objet->angleY)) + (objet->normale[i].x * cos(objet->angleY))   ;
+		objet->faces[i].nrmWrd.z   =    (objet->faces[i].nrmOrg.z * cos(objet->angleY)) - (objet->faces[i].nrmWrd.x * sin(objet->angleY))   ;
+		objet->faces[i].nrmWrd.x   =    (objet->faces[i].nrmOrg.z * sin(objet->angleY)) + (objet->faces[i].nrmWrd.x * cos(objet->angleY))   ;
 		
-		int    z   =  objet->normale[i].z   ;
+		int    z   =  objet->faces[i].nrmWrd.z   ;
 		
 		// par raport a l'axe X
-		objet->normale[i].z   =    (objet->normale[i].y * sin(objet->angleX)) + (z * cos(objet->angleX))   ;
-		objet->normale[i].y   =    (objet->normale[i].y * cos(objet->angleX)) - (z * sin(objet->angleX))   ;
+		objet->faces[i].nrmWrd.z   =    (objet->faces[i].nrmWrd.y * sin(objet->angleX)) + (z * cos(objet->angleX))   ;
+		objet->faces[i].nrmWrd.y   =    (objet->faces[i].nrmWrd.y * cos(objet->angleX)) - (z * sin(objet->angleX))   ;
 		
 	}
 	
 	/////-----------------------------chagement d'echelle--------------------------------/////
 	
-	for(i = 0 ;  i < objet->nbrePts ; i++)
+	for(int i = 0 ;  i < objet->nbrePts ; i++)
 	{
-		objet->points[i].x    =  (int)(objet->points[i].x * objet->echell) + objet->centre.x    ;
-		objet->points[i].y    =  (int)(objet->points[i].y * objet->echell) + objet->centre.y    ;
-		objet->points[i].z    =  (int)(objet->points[i].z * objet->echell) + objet->centre.z    ;
+		objet->ptsWrd[i].x    =  (int)(objet->ptsWrd[i].x * objet->scale) + objet->center.x    ;
+		objet->ptsWrd[i].y    =  (int)(objet->ptsWrd[i].y * objet->scale) + objet->center.y    ;
+		objet->ptsWrd[i].z    =  (int)(objet->ptsWrd[i].z * objet->scale) + objet->center.z    ;
 	}
 	
-	//objet->radius   *=  lamda      ;
+	// scale the sphere center point
+	objet->wrdSphrCent.x    =  (int)(objet->wrdSphrCent.x * objet->scale + objet->center.x)    ;
+	objet->wrdSphrCent.y    =  (int)(objet->wrdSphrCent.y * objet->scale + objet->center.y)    ;
+	objet->wrdSphrCent.z    =  (int)(objet->wrdSphrCent.z * objet->scale + objet->center.z)    ;
 	
 	return     ;
 }
@@ -3264,6 +3922,7 @@ static inline   void   Mix_PlayChannel_Bridge(int ch, MIX_Audio* audio, int loop
 
 void    animationRadar(int X , int Y , float R)
 {
+	
 	static      int   i    =   0    ;
 	
 	SDL_Rect    rectSrc    ;
@@ -3312,97 +3971,579 @@ void    animationTexte(void)
 	return      ;
 }
 
-/*
+Point   calculateFaceNormal(Point* nrm, Point* v1, Point* v2, Point* v3) 
+{
+	// Calculate vectors
+	Point   u   =   {v2->x - v1->x, v2->y - v1->y, v2->z - v1->z}     ;
+	Point   v   =   {v3->x - v1->x, v3->y - v1->y, v3->z - v1->z}     ;
+	
+	// Cross product
+	nrm->x   =   (u.y * v.z) - (u.z * v.y)     ;
+	nrm->y   =   (u.z * v.x) - (u.x * v.z)     ;
+	nrm->z   =   (u.x * v.y) - (u.y * v.x)     ;
 
-# bool CObjet3D::_LoadOBJ(const char *filename) // charge un objet Wavefront 3D (.obj)
-# {
-# FILE *fp = fopen(filename,"rb");
-# if(!fp) return false;
-# DEBUGLOG1("Chargement du fichier WAVEFRONT %s",filename)
-#
-# SFace3D face;
-# SGroup3D grp;
-# vec3 pt3D;
-# vec2 pt2D;
-# char *buf,buftmp[64];
-# long i,v,g; // compteur pour le stockage des données lors de la seconde passe
-# unsigned int lenbuf;
-#
-# grp.Actif2D = true;
-# grp.Actif3D = true;
-# while (!feof(fp)) {
-# buf = ReadLine(fp);
-# lenbuf = strlen((const char *)buf);
-# if (lenbuf > 0) {
-# sscanf(buf,"%s",buftmp);
-# if(!strcmp((const char *)buftmp,"#")) { // on a trouvé un commentaire, on passe
-# } else if(!strcmp((const char *)buftmp,"mtllib")) { // on a trouvé un matérial à charger ?
-# materials->Load(&buf[7]); // on charge le fichier associé
-# } else if(!strcmp((const char *)buftmp,"v")) { // on a trouvé une vertice ?
-# sscanf(&buf[2],"%f%f%f",&pt3D.x,&pt3D.y,&pt3D.z);
-# this->_pVertices.push_back(pt3D);
-# } else if(!strcmp((const char *)buftmp,"vt")) { // on a trouvé une coordonnée de texture ?
-# sscanf(&buf[2],"%f%f",&pt2D.x,&pt2D.y);
-# this->_pTexCoords.push_back(pt2D);
-# } else if(!strcmp((const char *)buftmp,"vn")) { // on a trouvé une normale ?
-# sscanf(&buf[2],"%f%f%f",&pt3D.x,&pt3D.y,&pt3D.z);
-# this->_pNormals.push_back(pt3D);
-# } else if(!strcmp((const char *)buftmp,"g")) { // on a trouvé un groupe ?
-# grp.Name = &buf[2];
-# grp.Material = 0;
-# this->_pGroups.push_back(grp);
-# } else if(!strcmp((const char *)buftmp,"usemtl")) { // on a trouvé un matérial à utiliser ?
-# if(this->_pGroups.size() <= 0) {
-# grp.Name = "No Name";
-# grp.Material = 0;
-# this->_pGroups.push_back(grp);
-# g = 0;
-# } else {
-# g = this->_pGroups.size() - 1;
-# }
-# this->_pGroups[g].Material = materials->GetId(&buf[7]); // on récupère son id
-# } else if(!strcmp((const char *)buftmp,"f")) { // on a trouvé une face ?
-# if(this->_pGroups.size() <= 0) {
-# grp.Name = "No Name";
-# grp.Material = 0;
-# this->_pGroups.push_back(grp);
-# g = 0;
-# } else {
-# g = this->_pGroups.size() - 1;
-# }
-# for(i=0; (buf[i] < '0') || (buf[i] > '9') ;i++); // on se positionne à la première valeur
-# for(v=0; v < 3 ;v++) { // triangles donc composés de 3 vertices
-# face.Vertices[v] = 0;
-# for(; (buf[i] >= '0') && (buf[i] <= '9') ;i++) { // on la récupère
-# face.Vertices[v] *= 10; // première vertice
-# face.Vertices[v] += buf[i]-0x30; // 0x30 est la valeur ascii du caractère '0'
-# }
-# face.Vertices[v]--; // indice n'est pas de 1 à nbFaces mais de 0 à nbFaces-1
-# NEXT_INDICE; // on se positionne à la valeur suivante
-# face.TexCoords[v] = 0;
-# for(; (buf[i] >= '0') && (buf[i] <= '9') ;i++) { // on la récupère
-# face.TexCoords[v] *= 10; // première coordonnée de texture
-# face.TexCoords[v] += buf[i]-0x30;
-# }
-# face.TexCoords[v]--; // indice n'est pas de 1 à nbFaces mais de 0 à nbFaces-1
-# NEXT_INDICE; // ect ... il y a 9 indices à récupérer
-# face.Normals[v] = 0;
-# for(; (buf[i] >= '0') && (buf[i] <= '9') ;i++) {
-# face.Normals[v] *= 10; // première normale
-# face.Normals[v] += buf[i]-0x30;
-# }
-# face.Normals[v]--; // indice n'est pas de 1 à nbFaces mais de 0 à nbFaces-1
-# if(v < 2) NEXT_INDICE;
-# }
-# this->_pGroups[g].pFaces.push_back(face); // on enregistre la face récupérée
-# }
-# }
-# delete[] buf;
-# }
-# fclose(fp);
-# DEBUGLOG2("Composition finale de l'objet : %ul vertices\n %ul groupes",this->_pVertices.size(),this->_pGroups.size())
-# DEBUGLOG2(" %ul faces\n %ul materials",this->GetNumFaces(),this->GetNumMaterials())
-# return true;
-# } 
+	// Prevent overflow
+	while(abs(nrm->x) > 10000 || abs(nrm->y) > 10000 || abs(nrm->z) > 10000)
+	{
+		nrm->x   /=   2   ;
+		nrm->y   /=   2   ;
+		nrm->z   /=   2   ;
+	}
+	
+	// Normalize the vector
+	float length   =   sqrt(nrm->x * nrm->x + nrm->y * nrm->y + nrm->z * nrm->z)     ;
 
-*/
+	nrm->x = (int)((nrm->x / length) * 100.0f);
+	nrm->y = (int)((nrm->y / length) * 100.0f);
+	nrm->z = (int)((nrm->z / length) * 100.0f);
+	
+	return *nrm  ;
+}
+
+bool loadOBJfile(const  char*  path, Objet* objet)
+{
+    // extract directory from path to handle relative texture paths
+	FILE*  file    =    fopen(path, "r")    ;	
+	char   dirPath[256]                     ;
+
+	int    maxX, minX, maxY, minY, maxZ, minZ   ;
+	bool   firstVertex     =    true            ;
+
+	const  char*   lastSlashPtr  =   strrchr(path, '/')  ;
+	if (lastSlashPtr == NULL) 
+	{
+		dirPath[0]  =   '\0'   ; // No directory found
+	}
+	else
+	{
+		int   dirLength     =   lastSlashPtr - path + 1    ;
+		strncpy(dirPath, path, dirLength)                  ;
+		dirPath[dirLength]  =   '\0'                       ; // Null-terminate the directory path
+	} 
+
+    if (!file) 
+	{
+        SDL_Log("Could not open OBJ file: %s", path)   ;
+        return   false   ;
+    }
+
+    objet->nbrePts       =   0   ;
+    objet->nbreFace      =   0   ;
+	objet->nbreSegment   =   0   ;	
+
+	objet->center.x   =   0   ;
+	objet->center.y   =   0   ;
+	objet->center.z   =   0   ;
+
+	objet->angleX     =   0.0f    ;
+	objet->angleY     =   0.0f    ;
+	objet->angleZ     =   0.0f    ;
+
+	objet->scale      =   1.0f    ;
+	objet->	isVisible =   false   ;
+
+    char   line[256]              ;
+
+	int   UV[NBRE_POINT_MAX][2]   ;	
+	int   uvCount   =        0    ;
+
+    while (fgets(line, sizeof(line), file)) 
+	{				
+		// Parse Material Library
+		if((strncmp(line, "mtllib", 6) == 0))
+		{
+			char   mtlFile[256]   ;
+			sscanf(line, "mtllib %s", mtlFile)   ;
+
+			char     fullMtlPath[256]            ;
+            snprintf(fullMtlPath, sizeof(fullMtlPath), "%s%s", dirPath, mtlFile)    ;
+			
+			FILE*  f   =   fopen(fullMtlPath, "r")   ;
+
+			if (!f) 
+			{
+				SDL_Log("Could not open mtlFile: %s", mtlFile)   ;
+				fclose(file)     ;
+				return   false   ;
+			}
+
+		    char   l[256]        ;
+
+			while (fgets(l, sizeof(l), f)) 
+			{
+				if((strncmp(l, "map_Kd", 6) == 0))
+				{
+					// Handle texture mapping
+					char      textureFile[256]    ;	
+					char      texturePath[256]    ;	
+
+					sscanf(l, "map_Kd %s", textureFile)   ;
+					snprintf(texturePath, sizeof(texturePath), "%s%s", dirPath, textureFile)    ;
+					//printf("texturePath = %s\n", texturePath)   ;
+					objet->texture   =   chargerImage(texturePath)   ;	
+				}
+			}
+		}
+		
+		// Parse Vertices
+		if (line[0] == 'v' && line[1] == ' ') 
+		{
+            float   x, y, z   ;
+
+
+            sscanf(line, "v %f %f %f", &x, &y, &z)     ;
+
+            // We scale by 500 to match your engine's coordinate system
+            objet->ptsOrg[objet->nbrePts].x    =   objet->ptsVsl[objet->nbrePts].x    =   objet->ptsWrd[objet->nbrePts].x   =   (int)(x * 1000)   ;
+            objet->ptsOrg[objet->nbrePts].y    =   objet->ptsVsl[objet->nbrePts].y    =   objet->ptsWrd[objet->nbrePts].y   =   (int)(y * 1000)   ;
+            objet->ptsOrg[objet->nbrePts].z    =   objet->ptsVsl[objet->nbrePts].z    =   objet->ptsWrd[objet->nbrePts].z   =   (int)(z * 1000)   ;
+
+			// initialize the bounding box borders with the first vertex
+			if(firstVertex)
+			{
+				maxX  =   minX   =   objet->ptsOrg[objet->nbrePts].x   ;
+				maxY  =   minY   =   objet->ptsOrg[objet->nbrePts].y   ;
+				maxZ  =   minZ   =   objet->ptsOrg[objet->nbrePts].z   ;				
+				
+				firstVertex      =    false               ;
+			}
+
+			// We calculate the sphere bounding box
+			if(objet->ptsOrg[objet->nbrePts].x > maxX)   maxX   =   objet->ptsOrg[objet->nbrePts].x   ;
+			if(objet->ptsOrg[objet->nbrePts].x < minX)   minX   =   objet->ptsOrg[objet->nbrePts].x   ;
+			if(objet->ptsOrg[objet->nbrePts].y > maxY)   maxY   =   objet->ptsOrg[objet->nbrePts].y   ;
+			if(objet->ptsOrg[objet->nbrePts].y < minY)   minY   =   objet->ptsOrg[objet->nbrePts].y   ;
+			if(objet->ptsOrg[objet->nbrePts].z > maxZ)   maxZ   =   objet->ptsOrg[objet->nbrePts].z   ;
+			if(objet->ptsOrg[objet->nbrePts].z < minZ)   minZ   =   objet->ptsOrg[objet->nbrePts].z   ;		
+
+			//objet->ptsWrd[objet->nbrePts].z   +=   objet->center.z  ;
+            
+			objet->nbrePts++     ;
+			//printf("Vertex %d: (%d, %d, %d)\n", objet->nbrePts, objet->ptsOrg[objet->nbrePts-1].x, objet->ptsOrg[objet->nbrePts-1].y, objet->ptsOrg[objet->nbrePts-1].z)   ;
+        }		
+
+		// Parse Texture Coordinates
+		if ((line[0] == 'v') && (line[1] == 't')) 
+		{
+			float   u, v   ;
+
+			sscanf(line, "vt %f %f", &u, &v)     ;
+
+			// Store texture coordinates
+			UV[uvCount][0]    =   (int)(u * objet->texture->w)            ;
+			UV[uvCount][1]    =   (int)((1.0f - v) * objet->texture->h)   ;
+			//printf("UV %d: (%d, %d)\n", uvCount, UV[uvCount][0], UV[uvCount][1])   ;
+			uvCount++    ;
+		}
+
+		// Parse Faces (Triangles)
+		if (line[0] == 'f' && line[1] == ' ') 
+		{
+			int   v1[3], v2[3], v3[3]     ;
+
+			// OBJ indices start at 1, so we subtract 1
+			if((sscanf(line, "f %d/%d/%d %d/%d/%d %d/%d/%d", &v1[0], &v1[1], &v1[2], &v2[0], &v2[1], &v2[2], &v3[0], &v3[1], &v3[2]) == 9) || 
+			   (sscanf(line, "f %d/%d %d/%d %d/%d", &v1[0], &v1[1], &v2[0], &v2[1], &v3[0], &v3[1]) == 6))
+			{
+				objet->faces[objet->nbreFace].vertices[0]    =    &objet->ptsVsl[v1[0] - 1]    ;
+				objet->faces[objet->nbreFace].vertices[1]    =    &objet->ptsVsl[v2[0] - 1]    ;
+				objet->faces[objet->nbreFace].vertices[2]    =    &objet->ptsVsl[v3[0] - 1]    ;
+
+				calculateFaceNormal(&objet->faces[objet->nbreFace].nrmOrg, objet->faces[objet->nbreFace].vertices[0], objet->faces[objet->nbreFace].vertices[1], objet->faces[objet->nbreFace].vertices[2])   ;
+
+				objet->faces[objet->nbreFace].nrmVsl     =   objet->faces[objet->nbreFace].nrmWrd     =   objet->faces[objet->nbreFace].nrmOrg     ;
+
+				// Store the segments for the face		
+				
+				// objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[0]     ;
+				// objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[1]     ;
+				// objet->nbreSegment++    ;
+
+				// objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[1]     ;
+				// objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[2]     ;
+				// objet->nbreSegment++    ;
+
+				// objet->segments[objet->nbreSegment][0]    =    objet->faces[objet->nbreFace].vertices[2]     ;
+				// objet->segments[objet->nbreSegment][1]    =    objet->faces[objet->nbreFace].vertices[0]     ;
+				// objet->nbreSegment++    ;
+				//printf("Segment %d\n", objet->nbreSegment);
+				
+				// Store the texture coordinate
+				objet->faces[objet->nbreFace].uv[0][0]    =   UV[v1[1] - 1][0]   ;
+				objet->faces[objet->nbreFace].uv[0][1]    =   UV[v1[1] - 1][1]   ;
+				objet->faces[objet->nbreFace].uv[1][0]    =   UV[v2[1] - 1][0]   ;
+				objet->faces[objet->nbreFace].uv[1][1]    =   UV[v2[1] - 1][1]   ;
+				objet->faces[objet->nbreFace].uv[2][0]    =   UV[v3[1] - 1][0]   ;
+				objet->faces[objet->nbreFace].uv[2][1]    =   UV[v3[1] - 1][1]   ;
+
+				objet->faces[objet->nbreFace].texture     =   objet->texture     ;
+				objet->faces[objet->nbreFace].owner       =   objet              ;
+				//printf("Face %d (x=%d, y=%d, z=%d).\n", objet->nbreFace, v1[0], v2[0], v3[0])   ;
+				objet->nbreFace++    ;
+			}
+			else
+			{
+				SDL_Log("Failed to parse face line: %s", line[0])   ;
+				fclose(file)    ;
+				return   false  ;
+			}
+		}
+    }
+
+	objet->orgSphrCent.x   =   objet->wrdSphrCent.x   =   (maxX + minX) / 2  ;
+	objet->orgSphrCent.y   =   objet->wrdSphrCent.y   =   (maxY + minY) / 2  ;
+	objet->orgSphrCent.z   =   objet->wrdSphrCent.z   =   (maxZ + minZ) / 2  ;
+
+	objet->radius   =  (int)sqrt(((maxX - objet->orgSphrCent.x) * (long long)(maxX - objet->orgSphrCent.x)) + ((maxY - objet->orgSphrCent.y) * (long long)(maxY - objet->orgSphrCent.y)) + ((maxZ - objet->orgSphrCent.z) * (long long)(maxZ - objet->orgSphrCent.z)))   ;
+	
+	fclose(file)   ;
+
+    return   true  ;
+}
+
+int    twoPointsDistance(Point* p1, Point* p2)
+{
+	return   (int)sqrt((p1->x - p2->x) * (long long)(p1->x - p2->x) + (p1->y - p2->y) * (long long)(p1->y - p2->y) + (p1->z - p2->z) * (long long)(p1->z - p2->z))   ;	
+}
+
+void    frustumCulling(Objet* objet)
+{
+	// calculate the relative sphere center of the object to the camera
+	Point   relativeSphereCenter   ; 
+	//Point   relativeCenter         ;              
+	Point   origin   =   {   0,   0,   0   }   ;   // the origin of the camera after transformation of the world
+
+	//relativeCenter.x   =    objet->center.x - camera.posX   ;
+	//relativeCenter.y   =    objet->center.y - camera.posY   ;
+	//relativeCenter.z   =    objet->center.z - camera.posZ   ;	
+
+	relativeSphereCenter.x     =   objet->wrdSphrCent.x - camera.posX     ;
+	relativeSphereCenter.y     =   objet->wrdSphrCent.y - camera.posY     ;
+	relativeSphereCenter.z     =   objet->wrdSphrCent.z - camera.posZ     ;
+		
+	// calculate the relative sphere center after a rotation of the camera
+	int  x   =  relativeSphereCenter.x   ;   // x needs to be saved, because its value change in the 2nd instruction		
+	relativeSphereCenter.x   =    (x * cos(-camera.angleY)) - (relativeSphereCenter.z * sin(-camera.angleY))  ;
+	relativeSphereCenter.z   =    (x * sin(-camera.angleY)) + (relativeSphereCenter.z * cos(-camera.angleY))  ;
+
+	int  y   =  relativeSphereCenter.y   ; 	
+	relativeSphereCenter.y   =    (y * cos(camera.angleX)) - (relativeSphereCenter.z * sin(camera.angleX))   ;
+	relativeSphereCenter.z   =    (y * sin(camera.angleX)) + (relativeSphereCenter.z * cos(camera.angleX))   ;
+
+	x   =  relativeSphereCenter.x   ;
+	relativeSphereCenter.x   =    (x * cos(camera.angleZ)) - (relativeSphereCenter.y * sin(camera.angleZ))  ;
+	relativeSphereCenter.y   =    (x * sin(camera.angleZ)) + (relativeSphereCenter.y * cos(camera.angleZ))  ;
+
+	bool   becomeVisible    =   false   ;
+
+	// This part is for debugging purpose, it is used to display the radius of the object
+	/*
+	if(objet == allObjet[43])
+	{
+		Point   radiusEdge         ; 
+		radiusEdge.x   =   relativeSphereCenter.x + (int)(objet->radius * objet->scale)   ;
+		radiusEdge.y   =   relativeSphereCenter.y    ;
+		radiusEdge.z   =   relativeSphereCenter.z    ;
+		
+		relativeSphereCenter.X  =  ((relativeSphereCenter.x * DISTANCE_FOCAL) / relativeSphereCenter.z) + (RES_HORIZ / 2)    ;	
+		relativeSphereCenter.Y  =  ((relativeSphereCenter.y * DISTANCE_FOCAL) / relativeSphereCenter.z) + (RES_VERT  / 2)    ;
+		
+		radiusEdge.X  =  ((radiusEdge.x * DISTANCE_FOCAL) / radiusEdge.z) + (RES_HORIZ / 2)    ;	
+		radiusEdge.Y  =  ((radiusEdge.y * DISTANCE_FOCAL) / radiusEdge.z) + (RES_VERT  / 2)    ;
+		
+		dbg1X = relativeSphereCenter.X  ;
+		dbg1Y = relativeSphereCenter.Y  ;
+		dbg2X = radiusEdge.X  ;
+		dbg2Y = radiusEdge.Y  ;
+	}*/
+
+	// test if the sphere center is behind the camera
+	if(relativeSphereCenter.z < 0)
+	{
+		if(twoPointsDistance(&relativeSphereCenter, &origin) < (int)(objet->scale * objet->radius))
+		{
+			becomeVisible    =   true    ;			
+		}
+		else
+		{
+			becomeVisible    =   false   ;	
+		}
+	}
+	else
+	{
+		// test if the object is too far away from the camera, outside the horizon
+		if(relativeSphereCenter.z - (int)(objet->radius * objet->scale) > HORIZON_END)
+		{
+			becomeVisible    =   false   ;				
+		}
+		else
+		{
+			int   dist   =   (int)(DISTANCE_FOCAL/(float)RES_HORIZ_DIV_2 * relativeSphereCenter.x + relativeSphereCenter.z) / sqrt((DISTANCE_FOCAL * DISTANCE_FOCAL) / (float)(RES_HORIZ_DIV_2 * RES_HORIZ_DIV_2) + 1) ; // calculate the distance from the sphere center to the camera frustum horizontal left plane
+			
+			// test if the sphere center is outside the camera frustum horizontal left plane
+			if((dist < 0) && (abs(dist) > (int)(objet->radius * objet->scale)))
+			{
+				becomeVisible    =   false   ;
+			}
+			else
+			{
+				dist   =   (int)(DISTANCE_FOCAL/(float)RES_HORIZ_DIV_2 * relativeSphereCenter.x - relativeSphereCenter.z) / sqrt((DISTANCE_FOCAL * DISTANCE_FOCAL) / (float)(RES_HORIZ_DIV_2 * RES_HORIZ_DIV_2) + 1) ; // calculate the distance from the sphere center to the camera frustum horizontal right plane
+				
+				// test if the sphere center is outside the camera frustum horizontal right plane
+				if((dist > 0) && (abs(dist) > (int)(objet->radius * objet->scale)))
+				{
+					becomeVisible    =   false   ;					
+				}
+				else
+				{
+					dist   =   (int)(DISTANCE_FOCAL/(float)RES_VERT_DIV_2 * relativeSphereCenter.y + relativeSphereCenter.z) / sqrt((DISTANCE_FOCAL * DISTANCE_FOCAL) / (float)(RES_VERT_DIV_2 * RES_VERT_DIV_2) + 1) ; // calculate the distance from the sphere center to the camera frustum vertical top plane
+					
+					// test if the sphere center is outside the camera frustum vertical top plane
+					if((dist < 0) && (abs(dist) > (int)(objet->radius * objet->scale)))
+					{
+						becomeVisible    =   false   ;	
+					}
+					else
+					{
+						dist   =   (int)(DISTANCE_FOCAL/(float)RES_VERT_DIV_2 * relativeSphereCenter.y - relativeSphereCenter.z) / sqrt((DISTANCE_FOCAL * DISTANCE_FOCAL) / (float)(RES_VERT_DIV_2 * RES_VERT_DIV_2) + 1) ; // calculate the distance from the sphere center to the camera frustum vertical bottom plane
+						
+						// test if the sphere center is outside the camera frustum vertical bottom plane
+						if((dist > 0) && (dist > (int)(objet->radius * objet->scale)))
+						{
+							becomeVisible    =   false   ;						
+						}
+						else
+						{
+							// The sphere center is inside the camera frustum, so the object should be visible
+							becomeVisible    =   true    ;							
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	// update the visibility status of the object and add/remove it from the scene accordingly
+	if((objet->isVisible == false)&&(becomeVisible == true))
+	{
+		objet->isVisible   =    true  ;
+
+		addObjectToScene(objet)       ;
+	}
+	else
+	{
+		if((objet->isVisible == true)&&(becomeVisible == false))
+		{
+			objet->isVisible   =    false  ;
+
+			removeObjectFromScene(objet)   ;
+		}
+	}                
+
+	return   ;
+}
+
+void   painterAlgorithmSort()
+{
+	// calculate the average Z value for each face
+	int   averageZ[NBRE_FACE_MAX_SCENE]      ;
+
+	for (int i = 0 ; i < nbreFaceScene ; i++)
+	{
+		averageZ[i]   =   (facesQueue[i]->vertices[0]->z + facesQueue[i]->vertices[1]->z + facesQueue[i]->vertices[2]->z + facesQueue[i]->vertices[2]->z)    ;
+	}
+
+	// Sort in descending order based on their average Z value (depth) using insertion sort algorithm
+	for (int i = 1 ; i < nbreFaceScene ; i++) 
+	{
+		Face*  key       =    facesQueue[i]        ;
+		int    keyAvg    =    averageZ[i]          ;
+
+		int j = i  ;
+		while(j > 0 && keyAvg > averageZ[j - 1]) 		
+		{			
+			facesQueue[j]     =   facesQueue[j - 1]     ;
+			averageZ[j]       =   averageZ[j - 1]       ;
+
+			j--   ;
+		}
+
+		facesQueue[j]     =   key     ;
+		averageZ[j]       =   keyAvg  ;
+	}
+
+	return  ;
+}
+
+// I will use the movement by buttons temporarily, the buttons will be separated in the future
+void    cameraMovement(Button* buttons, int speed, float spin)  
+{
+	if(buttons->W == 1)
+	{
+		camera.posZ   +=   speed * cos(camera.angleY)   ;
+		camera.posX   -=   speed * sin(camera.angleY)   ;
+		camera.posY   +=   speed * sin(camera.angleX)   ;
+	}
+	
+	if(buttons->S == 1)
+	{
+		camera.posZ   -=   speed * cos(camera.angleY)   ;
+		camera.posX   +=   speed * sin(camera.angleY)   ;
+		camera.posY   -=   speed * sin(camera.angleX)   ;
+	}
+	
+	if(buttons->A == 1)
+	{
+		camera.posX   -=   speed * cos(camera.angleY)   ;
+		camera.posZ   -=   speed * sin(camera.angleY)   ;
+		// the sidewalk displacement is not fully implemented, but it aggreable to use for now
+	}
+	
+	if(buttons->D == 1)
+	{
+		camera.posX   +=   speed * cos(camera.angleY)   ;
+		camera.posZ   +=   speed * sin(camera.angleY)   ;
+		// the sidewalk displacement is not fully implemented, but it aggreable to use for now
+	}
+
+	if(buttons->Q == 1)
+	{
+		camera.posY   -=   speed   ;
+	}
+	
+	if(buttons->E == 1)
+	{
+		camera.posY   +=   speed   ;
+	}
+
+	if(buttons->right == 1)	
+	{
+		camera.angleY   -=   spin   ;
+	}
+
+	if(buttons->left == 1)	
+	{
+		camera.angleY   +=   spin   ;
+	}
+
+	if(buttons->up == 1)	
+	{
+		camera.angleX   -=   spin   ;
+	}
+
+	if(buttons->down == 1)	
+	{
+		camera.angleX   +=   spin   ;
+	}
+
+	if(buttons->pageUp == 1)	
+	{
+		camera.angleZ   -=   spin   ;
+	}
+
+	if(buttons->pageDown == 1)	
+	{
+		camera.angleZ   +=   spin   ;
+	}
+
+	return   ;
+}
+
+void   transformToCameraPerspective(Objet* objet)
+{
+	Point   relativeCenter   ;
+	
+	if(!objet->isVisible)
+		return   ;
+	
+	for(int i = 0 ; i < objet->nbrePts ; i++)
+	{
+		objet->ptsVsl[i].x     =   objet->ptsWrd[i].x - camera.posX    ;
+		objet->ptsVsl[i].y     =   objet->ptsWrd[i].y - camera.posY    ;
+		objet->ptsVsl[i].z     =   objet->ptsWrd[i].z - camera.posZ    ;
+	}		
+
+	// rotation relative to the camera
+	for(int i = 0 ; i < objet->nbrePts ; i++)
+	{
+		int  x   =  objet->ptsVsl[i].x   ;   // x needs to be saved, because its value change in the 2nd instruction
+		
+		objet->ptsVsl[i].x   =    (x * cos(-camera.angleY)) - (objet->ptsVsl[i].z * sin(-camera.angleY))  ;
+		objet->ptsVsl[i].z   =    (x * sin(-camera.angleY)) + (objet->ptsVsl[i].z * cos(-camera.angleY))  ;
+
+		int  y   =  objet->ptsVsl[i].y   ; 
+		
+		objet->ptsVsl[i].y   =    (y * cos(camera.angleX)) - (objet->ptsVsl[i].z * sin(camera.angleX))   ;
+		objet->ptsVsl[i].z   =    (y * sin(camera.angleX)) + (objet->ptsVsl[i].z * cos(camera.angleX))   ;
+
+		x   =  objet->ptsVsl[i].x   ;
+
+		objet->ptsVsl[i].x   =    (x * cos(camera.angleZ)) - (objet->ptsVsl[i].y * sin(camera.angleZ))  ;
+		objet->ptsVsl[i].y   =    (x * sin(camera.angleZ)) + (objet->ptsVsl[i].y * cos(camera.angleZ))  ;
+	}
+
+	// rotation of the normal vectors relative to the camera
+	for(int i = 0 ; i < objet->nbreFace ; i++)
+	{
+		int  x   =  objet->faces[i].nrmWrd.x   ;   // x needs to be saved, because its value change in the 2nd instruction
+		
+		objet->faces[i].nrmVsl.x   =    (x * cos(-camera.angleY)) - (objet->faces[i].nrmWrd.z * sin(-camera.angleY))  ;
+		objet->faces[i].nrmVsl.z   =    (x * sin(-camera.angleY)) + (objet->faces[i].nrmWrd.z * cos(-camera.angleY))  ;
+
+		int  y   =  objet->faces[i].nrmWrd.y   ; 
+		
+		objet->faces[i].nrmVsl.y   =    (y * cos(camera.angleX)) - (objet->faces[i].nrmVsl.z * sin(camera.angleX))   ;
+		objet->faces[i].nrmVsl.z   =    (y * sin(camera.angleX)) + (objet->faces[i].nrmVsl.z * cos(camera.angleX))   ;
+
+		x   =  objet->faces[i].nrmVsl.x   ;
+
+		objet->faces[i].nrmVsl.x   =    (x * cos(camera.angleZ)) - (objet->faces[i].nrmVsl.y * sin(camera.angleZ))  ;
+		objet->faces[i].nrmVsl.y   =    (x * sin(camera.angleZ)) + (objet->faces[i].nrmVsl.y * cos(camera.angleZ))  ;		
+	}
+
+	return   ;
+}
+
+void    PlayerMovement(Button* buttons, Objet* player)
+{
+	static   float   rotX = 0.0f   ;
+	static   float   rotY = 0.0f   ;
+	static   float   rotZ = 0.0f   ;
+	
+	if(player != NULL)
+	{		
+		if(buttons->up == 1)
+		{
+			rotX   +=   0.01f   ;
+		}
+		
+		if(buttons->down == 1)
+		{
+			rotX   -=   0.01f   ;
+		}
+		
+		if(buttons->right == 1)	
+		{
+			rotZ   +=   0.01f   ;			
+		}
+
+		if(buttons->left == 1)	
+		{
+			rotZ   -=   0.01f   ;			
+		}
+
+		if(buttons->pageUp == 1)
+		{
+			rotY   +=   0.01f   ;			
+		}
+		
+		if(buttons->pageDown == 1)
+		{
+			rotY   -=   0.01f   ;				
+		}
+
+		localRotationScale(player, rotX, rotY, rotZ, 1.0f)   ;
+	}
+
+	return   ;
+}
