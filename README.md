@@ -110,18 +110,21 @@ cmake --build .
 
 ## 🚀 Quick Start (No Compilation Required)
 
-If you want to test the engine immediately without setting up a compiler or CMake, you can download the pre-compiled version for Windows:
+If you want to test the engine immediately without setting up a compiler or CMake, you can download the pre-compiled version for Windows, and you actually have 2 versions, the first one of the simple cube and the second version navigating Tomb raider 1 level 1 with a free camera :
 
-1. **Download the bundle:** 
+1. **Download the bundle 1:** 
    [Download Micro3D-Engine-Windows.zip](https://github.com/kara-abdelaziz/Micro3D-engine/releases/download/v0.1.0-alpha/Micro3D-Engine-Windows.zip).
 
-2. **Extract the ZIP:** 
+2. **Or download the bundle 2:** 
+   [Download Micro3D-Engine-Windows.zip](https://github.com/kara-abdelaziz/Micro3D-engine/releases/download/v0.4.0-beta/Release.v0.4.0.-.Camera.and.Culling.Windows.build.zip).
+
+3. **Extract the ZIP:** 
    Extract the contents to a folder of your choice. The ZIP contains:
    *   `3DEngine.exe` (The executable)
    *   All required **DLLs** (`SDL3.dll`, `SDL3_image.dll`, etc.)
    *   All necessary **Assets** (`.png`, `.mp3`, `.wav`, `.ttf`)
 
-3. **Run the Engine:** 
+4. **Run the Engine:** 
    Double-click `3DEngine.exe` to launch the demo.
 
 > **⚠️ Note:** Since this is a custom-built executable, Windows Defender may show a "Windows protected your PC" warning. You may need to click *More info* -> *Run anyway* to start the application.
